@@ -1,0 +1,39 @@
+[project]
+name = "apa-kernel"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "pydantic"
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi",
+    "uvicorn[standard]"
+]
+
+simulator = [
+    "pandas",
+    "matplotlib"
+]
+
+verification = [
+    "tqdm"
+]
+
+dev = [
+    "pytest",
+    "ruff",
+    "black",
+    "mypy"
+]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kernel*", "app*", "verification*"]
