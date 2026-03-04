@@ -160,9 +160,17 @@ If gateway.health == DOWN
 
 ---
 
+### I7 — SLA Terminal Invariant
+
+If latency_total > SLA_LIMIT
+→ state ∈ {FAILED}
+and no further AttemptExecution allowed
+
+---
+
 That’s it.
 
-Six invariants.
+Seven invariants.
 Closed.
 Executable.
 
@@ -247,14 +255,13 @@ Metrics must serve:
 * approval_rate
 * retry_distribution
 * average_attempts_per_txn
-* fraud_block_rate
 
 ---
 
 ## Gateway Metrics
 
 * rolling_success_rate
-* rolling_failure_rate
+* cost_per_successful_txn
 * p95_latency
 * timeout_rate
 
@@ -263,8 +270,9 @@ Metrics must serve:
 ## System Metrics
 
 * circuit_open_rate
-* invariant_violation_count
+* sla_breach_rate
 * average_decision_latency
+* retry_amplification_factor
 
 ---
 
