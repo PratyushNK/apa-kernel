@@ -51,7 +51,6 @@ amount: integer
 state: {INIT, ATTEMPTING, SUCCESS, FAILED, BLOCKED}
 attempt_count: integer
 last_error: {NONE, SOFT_DECLINE, HARD_DECLINE, TIMEOUT, NETWORK_ERROR}
-fraud_score: float (0–1)
 active_gateway: {G1, G2, NONE}
 ```
 

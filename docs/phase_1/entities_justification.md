@@ -516,3 +516,10 @@ Every core concept in your Phase-1 system is externally validated:
 [12] Visa Inc., “Visa core rules and Visa product and service rules,” 2025. Available: [https://usa.visa.com/dam/VCOM/download/about-visa/visa-rules-public.pdf](https://usa.visa.com/dam/VCOM/download/about-visa/visa-rules-public.pdf). Accessed: Mar. 3, 2026.
 
 [13] Zuora, Inc., “Smart retry overview,” Available: [https://knowledgecenter.zuora.com/Zuora_Payments/Process_payments/Smart_Retry/](https://knowledgecenter.zuora.com/Zuora_Payments/Process_payments/Smart_Retry/). Accessed: Mar. 3, 2026.
+
+---
+
+There are only 3 wording sensitivity points:
+1. Do not imply ISO explicitly defines absorbing invariant.
+2. Do not imply PCI mandates SLA termination behavior.
+3. Define retry amplification factor formally.
