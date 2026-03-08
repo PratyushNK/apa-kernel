@@ -142,24 +142,15 @@ If state == ATTEMPTING
 → active_gateway ≠ NONE
 → no concurrent attempt allowed
 
----
 
-### I5 — Fraud Block Invariant
-
-If fraud_score ≥ FRAUD_THRESHOLD
-→ state must transition to BLOCKED
-→ no routing allowed
-
----
-
-### I6 — Circuit Respect
+### I5 — Circuit Respect
 
 If gateway.health == DOWN
 → RouteDecision cannot select that gateway
 
 ---
 
-### I7 — SLA Terminal Invariant
+### I6 — SLA Terminal Invariant
 
 If latency_total > SLA_LIMIT
 → state ∈ {FAILED}
@@ -169,7 +160,7 @@ and no further AttemptExecution allowed
 
 That’s it.
 
-Seven invariants.
+Six invariants.
 Closed.
 Executable.
 
@@ -201,7 +192,7 @@ Mark FAILED.
 
 Retry allowed only if:
 
-* last_error ∈ {SOFT_DECLINE, TIMEOUT, NETWORK_ERROR}
+* last_error ∈ {SOFT_DECLINE, TIMEOUT}
 * attempt_count < MAX_RETRY
 * fraud_score < FRAUD_THRESHOLD
 
@@ -220,13 +211,62 @@ Delay = base_delay × 2^(attempt_count - 1)
 
 ---
 
-## P4 — Circuit Breaker Policy
+## P4 — Provider Weight Policy
 
-If gateway.failure_rate > FAILURE_THRESHOLD:
-→ health = DOWN
+Maintain a continuous weight score per provider updated over a rolling window. Routing probability is proportional to weight.
 
-If recovery window passes:
-→ health = UP
+```
+weights = {G1: w1, G2: w2}  where w1 + w2 = 1.0
+
+P(select Gi) = wi / sum(weights)
+
+Weight update rule:
+wi_new = wi_old * (1 - α) + success_rate_i * α
+
+where α = learning_rate ∈ (0, 1)
+```
+
+Invariant risk: if wi is not demoted fast enough during gateway degradation, I6 is violated — traffic routes to a provider that should be DOWN.
+
+---
+
+## P5 — Global Retry Budget Policy
+
+Cap total retries system-wide within a rolling time window, independent of per-transaction retry limits.
+
+```
+retry_budget_window_ms = W
+max_retries_per_window = B
+
+retries_in_window = Count(RetryDecision.retry_allowed == True)
+                   over last W milliseconds
+
+Retry allowed only if:
+    retries_in_window < B
+    AND P2 conditions satisfied
+```
+
+Invariant risk: loosening B risks I2 at system level — total retry amplification exceeds safe load bounds. Tightening B below transaction demand causes unnecessary failures.
+
+---
+
+## P6 — Timeout Threshold Policy
+
+Per-provider adaptive timeout value that determines when an attempt is classified as TIMEOUT.
+
+```
+timeout_ms[Gi] = T_base * f(regime_i)
+
+where:
+    T_base              = baseline timeout (ms)
+    f(HEALTHY)          = 1.0
+    f(DEGRADED)         = 1.5
+    f(OUTAGE)           = 0.5  (fail fast)
+
+AttemptResult = TIMEOUT if processing_latency_ms > timeout_ms[provider]
+```
+
+Invariant risk: if T_base is tuned too high, slow gateways consume SLA budget before timing out, risking I7. If tuned too low, healthy gateways are prematurely timed out, increasing retry load and risking I2 cascade.
 
 ---
 

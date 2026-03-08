@@ -86,20 +86,17 @@ class TransactionSimulator:
         self._advance_clock(delta_ms)
 
         # 2. Generate arriving transactions at current clock
-        arrivals = self.arrival_process.generate(self._clock_ms)
+        txn = self.arrival_process.generate(self._clock_ms)
 
-        # 3. Process each arrival through its full lifecycle
-        for txn in arrivals:
-            if not self._running:
-                break
-            events = await self.transaction_engine.process(
-                txn            = txn,
-                clock_ms       = self._clock_ms,
-                policy_engine  = self.policy_engine,
-                gateway_model  = self.gateway_model,
-            )
-            await self.event_stream.append(events)
-            self._txn_count += 1
+        # 3. Process txn through its full lifecycle
+        events = await self.transaction_engine.process(
+            txn            = txn,
+            clock_ms       = self._clock_ms,
+            policy_engine  = self.policy_engine,
+            gateway_model  = self.gateway_model,
+        )
+        await self.event_stream.append(events)
+        self._txn_count += 1
 
         # 4. Gateway model evaluates circuit state at each tick
         circuit_events = self.gateway_model.evaluate_circuits(self._clock_ms)
