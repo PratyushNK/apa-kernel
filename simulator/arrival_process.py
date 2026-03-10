@@ -17,6 +17,7 @@ import math
 import random
 import uuid
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 
 @dataclass
@@ -100,11 +101,10 @@ class ArrivalProcess:
     # ------------------------------------------------------------------
 
     def _make_transaction(self, clock_ms: int) -> dict:
-        """
-        Produces a minimal transaction dict.
-        TransactionEngine will build the full lifecycle from this.
-        """
         return {
             "txn_id"    : f"txn_{uuid.uuid4().hex[:12]}",
             "created_at": clock_ms,
+            "amount"    : Decimal(str(round(random.uniform(10.0, 1000.0), 2))),
+            "currency"  : "USD",
+            "sla_deadline_ms": clock_ms + 5_000,
         }

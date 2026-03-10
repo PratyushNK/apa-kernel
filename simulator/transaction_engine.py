@@ -23,6 +23,7 @@ Retry eligibility (industry standard):
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
+from decimal import Decimal
 
 from events import (
     AttemptStatus,
@@ -57,17 +58,16 @@ RETRYABLE_STATUSES = {AttemptStatus.SOFT_DECLINE, AttemptStatus.TIMEOUT}
 
 @dataclass
 class TxnContext:
-    """
-    Mutable per-transaction state owned by TransactionEngine.
-    Never exposed outside the engine.
-    """
     txn_id              : str
     created_at          : int
-    state               : TxnState             = TxnState.INIT
-    attempt_count       : int                  = 0
-    active_provider     : str                  = ""
+    amount              : Decimal          = field(default_factory=lambda: Decimal("0"))
+    currency            : str              = ""
+    sla_deadline_ms     : int              = 0
+    state               : TxnState         = TxnState.INIT
+    attempt_count       : int              = 0
+    active_provider     : str              = ""
     last_status         : AttemptStatus | None = None
-    _current_attempt_id : str                  = ""
+    _current_attempt_id : str              = ""
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +94,11 @@ class TransactionEngine:
         events: list[BaseEvent] = []
 
         ctx = TxnContext(
-            txn_id     = txn["txn_id"],
-            created_at = txn["created_at"],
+            txn_id          = txn["txn_id"],
+            created_at      = txn["created_at"],
+            amount          = txn["amount"],
+            currency        = txn["currency"],
+            sla_deadline_ms = txn["sla_deadline_ms"],
         )
 
         # INIT → emit NewTransaction
@@ -131,10 +134,10 @@ class TransactionEngine:
         return new_transaction(
             txn_id          = ctx.txn_id,
             created_at      = ctx.created_at,
-            amount          = __import__('decimal').Decimal("0"),  # amount comes from outside scope
-            currency        = "USD",
-            sla_deadline_ms = ctx.created_at + 5_000,  # 5 second SLA default
-        )
+            amount          = ctx.amount,
+            currency        = ctx.currency,
+            sla_deadline_ms = ctx.sla_deadline_ms,
+    )
 
     def _route(
         self,
@@ -175,7 +178,7 @@ class TransactionEngine:
         clock_ms     : int,
         gateway_model,
     ) -> tuple[BaseEvent, int]:
-        status, latency_ms, cost = gateway_model.execute(ctx.active_provider)
+        status, latency_ms, cost = gateway_model.execute(ctx.active_provider, clock_ms)
         ctx.last_status = status
 
         # Determine next state
@@ -207,6 +210,7 @@ class TransactionEngine:
             txn_id        = ctx.txn_id,
             attempt_count = ctx.attempt_count,
             last_status   = ctx.last_status,
+            clock_ms      = clock_ms,
         )
 
         if allowed:
