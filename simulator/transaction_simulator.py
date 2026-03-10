@@ -131,3 +131,11 @@ class TransactionSimulator:
         loop = asyncio.get_event_loop()
         for task in asyncio.all_tasks(loop):
             task.cancel()
+
+
+# The fix if you want interleaving
+# Change TransactionSimulator to maintain a pool of in-flight transactions processed concurrently:
+# pythonasyncio.gather(*[
+#     transaction_engine.process(txn, ...)
+#     for txn in in_flight_transactions
+# ])
