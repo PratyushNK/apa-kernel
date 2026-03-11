@@ -1,0 +1,85 @@
+{"event_type": "NewTransaction", "txn_id": "txn_fb55a522fdda", "created_at": 2, "amount": "542.17", "currency": "USD", "sla_deadline_ms": 5002}
+{"event_type": "RouteDecision", "txn_id": "txn_fb55a522fdda", "decision_id": "dec_f1029111", "timestamp": 2, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_fb55a522fdda", "attempt_id": "att_c1275497", "provider": "G2", "attempt_number": 1, "started_at": 2}
+{"event_type": "AttemptResult", "txn_id": "txn_fb55a522fdda", "attempt_id": "att_c1275497", "provider": "G2", "completed_at": 1243, "status": "TIMEOUT", "processing_latency_ms": 1241, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_fb55a522fdda", "attempt_id": "att_c1275497", "timestamp": 1243, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_fb55a522fdda", "decision_id": "dec_c67fae74", "timestamp": 1243, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_fb55a522fdda", "attempt_id": "att_44489456", "provider": "G2", "attempt_number": 2, "started_at": 1243}
+{"event_type": "AttemptResult", "txn_id": "txn_fb55a522fdda", "attempt_id": "att_44489456", "provider": "G2", "completed_at": 1703, "status": "TIMEOUT", "processing_latency_ms": 460, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_fb55a522fdda", "attempt_id": "att_44489456", "timestamp": 1703, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_5cd95d44dfde", "created_at": 4, "amount": "774.49", "currency": "USD", "sla_deadline_ms": 5004}
+{"event_type": "RouteDecision", "txn_id": "txn_5cd95d44dfde", "decision_id": "dec_0c5a3d6b", "timestamp": 4, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_5cd95d44dfde", "attempt_id": "att_31345db5", "provider": "G2", "attempt_number": 1, "started_at": 4}
+{"event_type": "AttemptResult", "txn_id": "txn_5cd95d44dfde", "attempt_id": "att_31345db5", "provider": "G2", "completed_at": 303, "status": "TIMEOUT", "processing_latency_ms": 299, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_5cd95d44dfde", "attempt_id": "att_31345db5", "timestamp": 303, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_5cd95d44dfde", "decision_id": "dec_7b6f2a24", "timestamp": 303, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_5cd95d44dfde", "attempt_id": "att_64a632f8", "provider": "G2", "attempt_number": 2, "started_at": 303}
+{"event_type": "AttemptResult", "txn_id": "txn_5cd95d44dfde", "attempt_id": "att_64a632f8", "provider": "G2", "completed_at": 466, "status": "TIMEOUT", "processing_latency_ms": 163, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_5cd95d44dfde", "attempt_id": "att_64a632f8", "timestamp": 466, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_cccbe8701241", "created_at": 7, "amount": "325.99", "currency": "USD", "sla_deadline_ms": 5007}
+{"event_type": "RouteDecision", "txn_id": "txn_cccbe8701241", "decision_id": "dec_10e16244", "timestamp": 7, "selected_provider": "G1", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_cccbe8701241", "attempt_id": "att_e4727297", "provider": "G1", "attempt_number": 1, "started_at": 7}
+{"event_type": "AttemptResult", "txn_id": "txn_cccbe8701241", "attempt_id": "att_e4727297", "provider": "G1", "completed_at": 1093, "status": "TIMEOUT", "processing_latency_ms": 1086, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_cccbe8701241", "attempt_id": "att_e4727297", "timestamp": 1093, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_cccbe8701241", "decision_id": "dec_6c895e0e", "timestamp": 1093, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_cccbe8701241", "attempt_id": "att_0972d9fa", "provider": "G2", "attempt_number": 2, "started_at": 1093}
+{"event_type": "AttemptResult", "txn_id": "txn_cccbe8701241", "attempt_id": "att_0972d9fa", "provider": "G2", "completed_at": 1917, "status": "TIMEOUT", "processing_latency_ms": 824, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_cccbe8701241", "attempt_id": "att_0972d9fa", "timestamp": 1917, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_c3cf071c8725", "created_at": 7, "amount": "738.22", "currency": "USD", "sla_deadline_ms": 5007}
+{"event_type": "RouteDecision", "txn_id": "txn_c3cf071c8725", "decision_id": "dec_f333d038", "timestamp": 7, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_c3cf071c8725", "attempt_id": "att_1b53a5e2", "provider": "G2", "attempt_number": 1, "started_at": 7}
+{"event_type": "AttemptResult", "txn_id": "txn_c3cf071c8725", "attempt_id": "att_1b53a5e2", "provider": "G2", "completed_at": 349, "status": "TIMEOUT", "processing_latency_ms": 342, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_c3cf071c8725", "attempt_id": "att_1b53a5e2", "timestamp": 349, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_c3cf071c8725", "decision_id": "dec_a6d64457", "timestamp": 349, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_c3cf071c8725", "attempt_id": "att_ead58b85", "provider": "G2", "attempt_number": 2, "started_at": 349}
+{"event_type": "AttemptResult", "txn_id": "txn_c3cf071c8725", "attempt_id": "att_ead58b85", "provider": "G2", "completed_at": 922, "status": "TIMEOUT", "processing_latency_ms": 573, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_c3cf071c8725", "attempt_id": "att_ead58b85", "timestamp": 922, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_2b363cea3fb7", "created_at": 8, "amount": "488.86", "currency": "USD", "sla_deadline_ms": 5008}
+{"event_type": "RouteDecision", "txn_id": "txn_2b363cea3fb7", "decision_id": "dec_a36b1cc4", "timestamp": 8, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_2b363cea3fb7", "attempt_id": "att_14535673", "provider": "G2", "attempt_number": 1, "started_at": 8}
+{"event_type": "AttemptResult", "txn_id": "txn_2b363cea3fb7", "attempt_id": "att_14535673", "provider": "G2", "completed_at": 1564, "status": "TIMEOUT", "processing_latency_ms": 1556, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_2b363cea3fb7", "attempt_id": "att_14535673", "timestamp": 1564, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_2b363cea3fb7", "decision_id": "dec_74efb33c", "timestamp": 1564, "selected_provider": "G1", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_2b363cea3fb7", "attempt_id": "att_1e003a82", "provider": "G1", "attempt_number": 2, "started_at": 1564}
+{"event_type": "AttemptResult", "txn_id": "txn_2b363cea3fb7", "attempt_id": "att_1e003a82", "provider": "G1", "completed_at": 3718, "status": "TIMEOUT", "processing_latency_ms": 2154, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_2b363cea3fb7", "attempt_id": "att_1e003a82", "timestamp": 3718, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_e6f7a62ef3b0", "created_at": 8, "amount": "616.82", "currency": "USD", "sla_deadline_ms": 5008}
+{"event_type": "RouteDecision", "txn_id": "txn_e6f7a62ef3b0", "decision_id": "dec_e15ce37f", "timestamp": 8, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_e6f7a62ef3b0", "attempt_id": "att_899a7c2b", "provider": "G2", "attempt_number": 1, "started_at": 8}
+{"event_type": "AttemptResult", "txn_id": "txn_e6f7a62ef3b0", "attempt_id": "att_899a7c2b", "provider": "G2", "completed_at": 820, "status": "TIMEOUT", "processing_latency_ms": 812, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_e6f7a62ef3b0", "attempt_id": "att_899a7c2b", "timestamp": 820, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_e6f7a62ef3b0", "decision_id": "dec_ca8263bc", "timestamp": 820, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_e6f7a62ef3b0", "attempt_id": "att_a2f25f48", "provider": "G2", "attempt_number": 2, "started_at": 820}
+{"event_type": "AttemptResult", "txn_id": "txn_e6f7a62ef3b0", "attempt_id": "att_a2f25f48", "provider": "G2", "completed_at": 1273, "status": "TIMEOUT", "processing_latency_ms": 453, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_e6f7a62ef3b0", "attempt_id": "att_a2f25f48", "timestamp": 1273, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_c43e501ea3a3", "created_at": 10, "amount": "305.4", "currency": "USD", "sla_deadline_ms": 5010}
+{"event_type": "RouteDecision", "txn_id": "txn_c43e501ea3a3", "decision_id": "dec_4211f933", "timestamp": 10, "selected_provider": "G1", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_c43e501ea3a3", "attempt_id": "att_3eedd8d7", "provider": "G1", "attempt_number": 1, "started_at": 10}
+{"event_type": "AttemptResult", "txn_id": "txn_c43e501ea3a3", "attempt_id": "att_3eedd8d7", "provider": "G1", "completed_at": 1092, "status": "TIMEOUT", "processing_latency_ms": 1082, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_c43e501ea3a3", "attempt_id": "att_3eedd8d7", "timestamp": 1092, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_c43e501ea3a3", "decision_id": "dec_f2a502fc", "timestamp": 1092, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_c43e501ea3a3", "attempt_id": "att_924c7f88", "provider": "G2", "attempt_number": 2, "started_at": 1092}
+{"event_type": "AttemptResult", "txn_id": "txn_c43e501ea3a3", "attempt_id": "att_924c7f88", "provider": "G2", "completed_at": 2028, "status": "TIMEOUT", "processing_latency_ms": 936, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_c43e501ea3a3", "attempt_id": "att_924c7f88", "timestamp": 2028, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_374ecc54a4de", "created_at": 13, "amount": "410.21", "currency": "USD", "sla_deadline_ms": 5013}
+{"event_type": "RouteDecision", "txn_id": "txn_374ecc54a4de", "decision_id": "dec_fd537c0f", "timestamp": 13, "selected_provider": "G1", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_374ecc54a4de", "attempt_id": "att_ed841a54", "provider": "G1", "attempt_number": 1, "started_at": 13}
+{"event_type": "AttemptResult", "txn_id": "txn_374ecc54a4de", "attempt_id": "att_ed841a54", "provider": "G1", "completed_at": 276, "status": "TIMEOUT", "processing_latency_ms": 263, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_374ecc54a4de", "attempt_id": "att_ed841a54", "timestamp": 276, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_374ecc54a4de", "decision_id": "dec_bc2e981c", "timestamp": 276, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_374ecc54a4de", "attempt_id": "att_a9ebadd7", "provider": "G2", "attempt_number": 2, "started_at": 276}
+{"event_type": "AttemptResult", "txn_id": "txn_374ecc54a4de", "attempt_id": "att_a9ebadd7", "provider": "G2", "completed_at": 479, "status": "TIMEOUT", "processing_latency_ms": 203, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_374ecc54a4de", "attempt_id": "att_a9ebadd7", "timestamp": 479, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_d2d4afb6b8ad", "created_at": 13, "amount": "682.62", "currency": "USD", "sla_deadline_ms": 5013}
+{"event_type": "RouteDecision", "txn_id": "txn_d2d4afb6b8ad", "decision_id": "dec_df533ab4", "timestamp": 13, "selected_provider": "G2", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_d2d4afb6b8ad", "attempt_id": "att_96946d58", "provider": "G2", "attempt_number": 1, "started_at": 13}
+{"event_type": "AttemptResult", "txn_id": "txn_d2d4afb6b8ad", "attempt_id": "att_96946d58", "provider": "G2", "completed_at": 250, "status": "TIMEOUT", "processing_latency_ms": 237, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_d2d4afb6b8ad", "attempt_id": "att_96946d58", "timestamp": 250, "retry_allowed": true, "backoff_ms": 100}
+{"event_type": "RouteDecision", "txn_id": "txn_d2d4afb6b8ad", "decision_id": "dec_550f8b6f", "timestamp": 250, "selected_provider": "G1", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_d2d4afb6b8ad", "attempt_id": "att_f7c74c43", "provider": "G1", "attempt_number": 2, "started_at": 250}
+{"event_type": "AttemptResult", "txn_id": "txn_d2d4afb6b8ad", "attempt_id": "att_f7c74c43", "provider": "G1", "completed_at": 1342, "status": "TIMEOUT", "processing_latency_ms": 1092, "provider_cost": "0.25"}
+{"event_type": "RetryDecision", "txn_id": "txn_d2d4afb6b8ad", "attempt_id": "att_f7c74c43", "timestamp": 1342, "retry_allowed": false, "backoff_ms": 0}
+{"event_type": "NewTransaction", "txn_id": "txn_f3217836fc6a", "created_at": 13, "amount": "274.23", "currency": "USD", "sla_deadline_ms": 5013}
+{"event_type": "RouteDecision", "txn_id": "txn_f3217836fc6a", "decision_id": "dec_adacae10", "timestamp": 13, "selected_provider": "G1", "decision_latency_ms": 2}
+{"event_type": "AttemptExecution", "txn_id": "txn_f3217836fc6a", "attempt_id": "att_99a025d1", "provider": "G1", "attempt_number": 1, "started_at": 13}
+{"event_type": "AttemptResult", "txn_id": "txn_f3217836fc6a", "attempt_id": "att_99a025d1", "provider": "G1", "completed_at": 142, "status": "SUCCESS", "processing_latency_ms": 129, "provider_cost": "0.25"}
