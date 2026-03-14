@@ -266,3 +266,10 @@ class GatewayModel:
                 return CircuitState.OPEN
 
         return state.circuit
+    
+    
+    def get_regimes(self) -> dict[str, str]:
+        return {
+            name: state.regime.value
+            for name, state in self._states.items()
+        }

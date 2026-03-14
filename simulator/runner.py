@@ -11,6 +11,15 @@ from policy_engine import PolicyEngine, PolicyStore
 from gateway_model import GatewayModel, ProviderConfig
 from event_stream import EventStream, JSONLBackend
 from transaction_simulator import TransactionSimulator, SimulatorConfig
+from kernel.aggregator.aggregator import Aggregator, HealthThresholds
+
+aggregator = Aggregator(
+    log_path             = "events.jsonl",
+    window_size_ms       = 60_000,
+    heartbeat_interval_s = 5.0,
+    thresholds           = HealthThresholds(),
+)
+
 
 import os
 if os.path.exists("events.jsonl"):
@@ -74,6 +83,7 @@ async def main():
 
     await asyncio.gather(
         simulator.run(),
+        aggregator.run_heartbeat(),
         #print_tail(),
     )
 
