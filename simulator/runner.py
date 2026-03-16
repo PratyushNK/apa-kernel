@@ -8,15 +8,32 @@ import asyncio
 from arrival_process import ArrivalProcess, ArrivalConfig, BurstConfig
 from transaction_engine import TransactionEngine
 from policy_engine import PolicyEngine, PolicyStore
-from gateway_model import GatewayModel, ProviderConfig
+from gateway_model import GatewayModel, ProviderConfig, Regime
 from event_stream import EventStream, JSONLBackend
 from transaction_simulator import TransactionSimulator, SimulatorConfig
+from kernel.aggregator.aggregator import Aggregator, HealthThresholds
+import pathlib
 
-import os
-if os.path.exists("events.jsonl"):
-    os.remove("events.jsonl")
+ROOT = pathlib.Path(__file__).parent.parent  # apa-kernel/
+STREAMS  = ROOT / "data" / "streams"
+POLICIES = ROOT / "data" / "policies"
+
+aggregator_path = str(STREAMS / "events.jsonl")
+backend_path    = str(STREAMS / "events.jsonl")
+store_path      = str(POLICIES / "policy.json")
+
+aggregator = Aggregator(
+    log_path             = aggregator_path,
+    window_size_ms       = 60_000,
+    heartbeat_interval_s = 5.0,
+    thresholds           = HealthThresholds(),
+)
 
 async def main():
+    events_path = STREAMS / "events.jsonl"
+    if events_path.exists():
+        events_path.unlink()
+
     # --- Gateway setup ---
     providers = [
         ProviderConfig(name="G1"),
@@ -25,7 +42,7 @@ async def main():
     gateway_model = GatewayModel(providers)
 
     # --- Policy setup ---
-    store         = PolicyStore("policy.json")
+    store         = PolicyStore(store_path)
     policy_engine = PolicyEngine(store, gateway_model)
 
     # --- Arrival process ---
@@ -40,7 +57,7 @@ async def main():
     arrival_process = ArrivalProcess(arrival_config)
 
     # --- Event stream ---
-    backend      = JSONLBackend("events.jsonl")
+    backend      = JSONLBackend(backend_path)
     event_stream = EventStream(backend, tail_size=100)
 
     # --- Transaction engine ---
@@ -48,8 +65,8 @@ async def main():
 
     # --- Simulator ---
     config = SimulatorConfig(
-        max_transactions = 30,
-        speed_multiplier = 50.0,    # 50x faster than real time
+        max_transactions = 400,
+        speed_multiplier = 10.0,    # 10x faster than real time
         clock_start_ms   = 0,
     )
     simulator = TransactionSimulator(
@@ -72,10 +89,28 @@ async def main():
             seen = len(tail)
             await asyncio.sleep(0.1)
 
-    await asyncio.gather(
-        simulator.run(),
-        #print_tail(),
-    )
+    async def inject_disturbance():
+        await asyncio.sleep(0.005)   # let healthy baseline establish
+        gateway_model.force_regime("G1", Regime.OUTAGE)
+        print("[disturbance] G1 forced to OUTAGE")
+
+    async def run_simulation():
+        await simulator.run()
+        aggregator.stop()          # stop heartbeat when simulator finishes
+
+    try:
+        await asyncio.gather(
+            run_simulation(),
+            aggregator.run_heartbeat(),
+            inject_disturbance(),
+            # print_tail()
+        )
+    except asyncio.CancelledError:
+        pass
+    finally:
+        aggregator.stop()
+        await event_stream.flush()
+        print("[runner] done.")
 
 
 if __name__ == "__main__":

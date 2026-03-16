@@ -411,8 +411,8 @@ async def scenario_everything_breaks(total_txns: int = 1000, print_live: bool = 
                 Regime.OUTAGE  : {"success": 0.02, "soft_decline": 0.18, "hard_decline": 0.80},
             },
             failure_threshold  = 0.3,
-            eval_window_ms     = 5_000,
-            recovery_window_ms = 15_000,
+            eval_window_ms     = 200,
+            recovery_window_ms = 500,
         ),
         ProviderConfig(
             name        = "G2",
@@ -427,8 +427,8 @@ async def scenario_everything_breaks(total_txns: int = 1000, print_live: bool = 
                 Regime.OUTAGE  : {"success": 0.02, "soft_decline": 0.18, "hard_decline": 0.80},
             },
             failure_threshold  = 0.3,
-            eval_window_ms     = 5_000,
-            recovery_window_ms = 15_000,
+            eval_window_ms     = 200,
+            recovery_window_ms = 500,
         ),
     ]
     arrival_config = ArrivalConfig(
@@ -460,14 +460,14 @@ async def main():
     # Uncomment the scenario you want to run.
     # All accept: total_txns (int), print_live (bool)
 
-    # await scenario_healthy_baseline(total_txns=10,  print_live=False)
+    await scenario_healthy_baseline(total_txns=1000,  print_live=False)
     # await scenario_gateway_degradation(total_txns=10,  print_live=False)
     # await scenario_full_outage(total_txns=10,  print_live=False)
     # await scenario_circuit_breaker(total_txns=15,  print_live=False)
     # await scenario_retry_amplification(total_txns=10,  print_live=False)
     # await scenario_sla_breach(total_txns=10,  print_live=False)
     # await scenario_burst_traffic(total_txns=20, print_live=False)
-    await scenario_everything_breaks(total_txns=15, print_live=False)
+    await scenario_everything_breaks(total_txns=1000, print_live=False)
 
 
 if __name__ == "__main__":
