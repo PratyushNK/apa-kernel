@@ -25,8 +25,8 @@ from kernel.aggregator.window import WindowReader
 class HealthThresholds:
     min_approval_rate        : float = 0.85
     max_p95_latency_ms       : float = 500.0
-    max_timeout_rate         : float = 0.10
-    max_sla_breach_rate      : float = 0.05
+    max_timeout_rate         : float = 0.05
+    max_sla_breach_rate      : float = 0.10
     max_retry_amplification  : float = 2.0
     max_circuit_open_rate    : float = 0.20
 
@@ -54,18 +54,6 @@ class Aggregator:
         self._running             : bool = False
 
     # ------------------------------------------------------------------
-    # Called by simulator to keep clock and regimes current
-    # ------------------------------------------------------------------
-
-    def update_context(
-        self,
-        clock_ms       : int,
-        gateway_regimes: dict[str, str],
-    ) -> None:
-        self._clock_ms        = clock_ms
-        self._gateway_regimes = gateway_regimes
-
-    # ------------------------------------------------------------------
     # 1. Async heartbeat loop — runs alongside simulator
     # ------------------------------------------------------------------
 
@@ -79,20 +67,15 @@ class Aggregator:
         self._running = False
 
     def _tick(self) -> None:
-        if self._clock_ms == 0:
+        snapshot = self._reader.compute(self._window_size_ms, self._max_retry)
+        if not snapshot.has_sufficient_data:
             return
-
-        snapshot = self._reader.compute(
-            window_start_ms = self._clock_ms - self._window_size_ms,
-            window_end_ms   = self._clock_ms,
-            gateway_regimes = self._gateway_regimes,
-            max_retry       = self._max_retry,
-        )
-
-        self._current = snapshot
-
-        if snapshot.has_sufficient_data and self._is_healthy(snapshot):
+        # Only update last_healthy before setting current
+        if self._current is not None and self._is_healthy(snapshot):
+            self._last_healthy = self._current
+        elif self._last_healthy is None and self._is_healthy(snapshot):
             self._last_healthy = snapshot
+        self._current = snapshot
 
     # ------------------------------------------------------------------
     # 2. On-demand service — called by Adaptation Scheduler

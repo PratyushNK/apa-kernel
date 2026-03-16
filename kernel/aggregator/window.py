@@ -36,22 +36,19 @@ class WindowReader:
         self._path   = Path(log_path)
         self._offset : int = 0
 
-    def compute(
-        self,
-        window_start_ms : int,
-        window_end_ms   : int,
-        gateway_regimes : dict[str, str],
-        max_retry       : int = 3,
-    ) -> MetricsSnapshot:
-        events   = self._read_new_events()
-        windowed = [
-            e for e in events
-            if window_start_ms <= self._timestamp(e) <= window_end_ms
-        ]
-        return self._compute(
-            windowed, window_start_ms, window_end_ms,
-            gateway_regimes, max_retry
-        )
+    def compute(self, window_size_ms: int, max_retry: int = 3) -> MetricsSnapshot:
+        events       = self._read_new_events()
+        latest_clock = max((self._timestamp(e) for e in events), default=0)
+        window_start = latest_clock - window_size_ms
+        regimes      = self._infer_regimes(events)
+        return self._compute(events, window_start, latest_clock, regimes, max_retry)
+    
+    def _infer_regimes(self, events: list[dict]) -> dict[str, str]:
+        regimes = {}
+        for e in events:
+            if e.get("event_type") == "CircuitEvaluation":
+                regimes[e["provider"]] = e["circuit_state"]
+        return regimes
 
     # ------------------------------------------------------------------
     # Incremental reader

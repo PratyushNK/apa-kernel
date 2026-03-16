@@ -155,9 +155,8 @@ def test_single_snapshot(
     result = _build_aggregator(scenario, window_ms)
     if result is None:
         return
-    aggregator, _, max_clock = result
+    aggregator, _, _ = result
 
-    aggregator.update_context(max_clock, {"G1": "HEALTHY", "G2": "HEALTHY"})
     aggregator._tick()
 
     snapshot, delta = aggregator.get_snapshot()
@@ -192,7 +191,6 @@ def test_healthy_baseline_capture(
     print(f"{'='*60}")
 
     while clock <= max_clock:
-        aggregator.update_context(clock, {"G1": "HEALTHY", "G2": "HEALTHY"})
         aggregator._tick()
         ticks += 1
 
@@ -227,9 +225,8 @@ def test_delta_from_healthy(
     result = _build_aggregator(healthy_scenario, window_ms)
     if result is None:
         return
-    aggregator, _, max_clock_healthy = result
+    aggregator, _, _ = result
 
-    aggregator.update_context(max_clock_healthy, {"G1": "HEALTHY", "G2": "HEALTHY"})
     aggregator._tick()
 
     if aggregator._last_healthy is None:
@@ -298,10 +295,9 @@ async def test_async_heartbeat(
     )
     if result is None:
         return
-    aggregator, _, max_clock = result
+    aggregator, _, _ = result
 
     aggregator._heartbeat_interval = heartbeat_interval_s
-    aggregator.update_context(max_clock, {"G1": "HEALTHY", "G2": "HEALTHY"})
 
     print(f"\n{'='*60}")
     print(f"  Async Heartbeat Test — {scenario}")
@@ -347,7 +343,6 @@ def test_compare_scenarios(
         if result is None:
             continue
         aggregator, _, max_clock = result
-        aggregator.update_context(max_clock, {"G1": "UNKNOWN", "G2": "UNKNOWN"})
         aggregator._tick()
         snapshot, _ = aggregator.get_snapshot()
         if snapshot:
@@ -392,28 +387,28 @@ def test_compare_scenarios(
 if __name__ == "__main__":
 
     # Test 1 — basic sanity, all 11 metrics compute correctly
-    # test_single_snapshot(scenario="healthy_baseline", window_ms=5_000)
+    test_single_snapshot(scenario="healthy_baseline", window_ms=500)
 
     # Test 2 — verify healthy baseline gets captured
-    # test_healthy_baseline_capture(scenario="healthy_baseline", window_ms=5_000)
+    test_healthy_baseline_capture(scenario="healthy_baseline", window_ms=500)
 
     # Test 3 — delta from healthy to degraded
-    # test_delta_from_healthy(
-    #     healthy_scenario = "healthy_baseline",
-    #     stress_scenario  = "everything_breaks",
-    #     window_ms        = 5_000,
-    # )
+    test_delta_from_healthy(
+        healthy_scenario = "healthy_baseline",
+        stress_scenario  = "everything_breaks",
+        window_ms        = 500,
+    )
 
     # Test 4 — real async heartbeat loop
-    # asyncio.run(test_async_heartbeat(
-    #     scenario             = "healthy_baseline",
-    #     heartbeat_interval_s = 0.5,
-    #     run_seconds          = 3.0,
-    # ))
+    asyncio.run(test_async_heartbeat(
+        scenario             = "healthy_baseline",
+        heartbeat_interval_s = 0.5,
+        run_seconds          = 3.0,
+    ))
 
     # Test 5 — side by side comparison
     test_compare_scenarios(
         scenario_a = "healthy_baseline",
         scenario_b = "everything_breaks",
-        window_ms  = 5_000,
+        window_ms  = 500,
     )

@@ -411,8 +411,8 @@ async def scenario_everything_breaks(total_txns: int = 1000, print_live: bool = 
                 Regime.OUTAGE  : {"success": 0.02, "soft_decline": 0.18, "hard_decline": 0.80},
             },
             failure_threshold  = 0.3,
-            eval_window_ms     = 5_000,
-            recovery_window_ms = 15_000,
+            eval_window_ms     = 200,
+            recovery_window_ms = 500,
         ),
         ProviderConfig(
             name        = "G2",
@@ -427,8 +427,8 @@ async def scenario_everything_breaks(total_txns: int = 1000, print_live: bool = 
                 Regime.OUTAGE  : {"success": 0.02, "soft_decline": 0.18, "hard_decline": 0.80},
             },
             failure_threshold  = 0.3,
-            eval_window_ms     = 5_000,
-            recovery_window_ms = 15_000,
+            eval_window_ms     = 200,
+            recovery_window_ms = 500,
         ),
     ]
     arrival_config = ArrivalConfig(

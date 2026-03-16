@@ -85,9 +85,9 @@ class ProviderConfig:
 
     # P6 — timeout threshold per regime (ms)
     timeout_ms        : dict[str, int] = field(default_factory=lambda: {
-        Regime.HEALTHY : 500,
-        Regime.DEGRADED: 750,
-        Regime.OUTAGE  : 250,   # fail fast during outage
+        Regime.HEALTHY : 300,
+        Regime.DEGRADED: 400,
+        Regime.OUTAGE  : 150,   # fail fast during outage
     })
 
     # Cost per attempt (Decimal)
@@ -273,3 +273,6 @@ class GatewayModel:
             name: state.regime.value
             for name, state in self._states.items()
         }
+    
+    def force_regime(self, provider: str, regime: Regime) -> None:
+        self._states[provider].regime = regime
