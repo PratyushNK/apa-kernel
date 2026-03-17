@@ -1,0 +1,17 @@
+# TLC generated files — recreated on every run
+tla_specs/TB_base.tla
+tla_specs/TB_adapted_*.tla
+tla_specs/TB_base.cfg
+tla_specs/TB_adapted_*.cfg
+tla_specs/states/
+
+# Old testbench files
+tla_specs/testbench_*.tla
+tla_specs/testbench_*.cfg
+
+# Jar — large binary, not committed
+tla_specs/tla2tools.jar
+
+# Python
+__pycache__/
+*.pyc
