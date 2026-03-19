@@ -49,6 +49,7 @@ class KernelEngine:
         check_interval_s : float = 2.0,
         cooldown_s       : float = 30.0,
         min_approval_rate: float = HealthThresholds.min_approval_rate,
+        max_cycles_cooldown_s: float = 60.0,
     ):
         self._aggregator         = aggregator
         self._adaptation_loop    = adaptation_loop
@@ -56,6 +57,8 @@ class KernelEngine:
         self._adaptation_running : bool = False
         self._running            : bool = False
         self._cooldown_s         = cooldown_s
+        self._max_cycles_cooldown_s = max_cycles_cooldown_s
+        self._active_cooldown_s  = cooldown_s
         self._min_approval_rate  = min_approval_rate
         self._mode               = self.MODE_MONITORING
         self._last_success_at_s  : float | None = None
@@ -106,17 +109,27 @@ class KernelEngine:
 
             if result.status == "success":
                 self._mode = self.MODE_COOLDOWN
+                self._active_cooldown_s = self._cooldown_s
                 self._last_success_at_s = time.monotonic()
                 logging.info(
-                    f"[engine] entering cooldown for {self._cooldown_s:.0f}s"
+                    f"[engine] entering cooldown for {self._active_cooldown_s:.0f}s"
+                )
+            elif result.status == "max_cycles":
+                self._mode = self.MODE_COOLDOWN
+                self._active_cooldown_s = self._max_cycles_cooldown_s
+                self._last_success_at_s = time.monotonic()
+                logging.info(
+                    f"[engine] entering cooldown for {self._active_cooldown_s:.0f}s"
                 )
             else:
                 self._mode = self.MODE_MONITORING
                 self._last_success_at_s = None
+                self._active_cooldown_s = self._cooldown_s
         except Exception as e:
             logging.error(f"[engine] adaptation error — {e}")
             self._mode = self.MODE_MONITORING
             self._last_success_at_s = None
+            self._active_cooldown_s = self._cooldown_s
         finally:
             self._adaptation_running = False
 
@@ -135,9 +148,10 @@ class KernelEngine:
             elapsed = 0.0
             if self._last_success_at_s is not None:
                 elapsed = time.monotonic() - self._last_success_at_s
-            if elapsed >= self._cooldown_s:
+            if elapsed >= self._active_cooldown_s:
                 self._mode = self.MODE_MONITORING
                 self._last_success_at_s = None
+                self._active_cooldown_s = self._cooldown_s
                 logging.info("[engine] cooldown expired — resuming monitoring")
             else:
                 degraded = snapshot.approval_rate < self._min_approval_rate
