@@ -59,7 +59,7 @@ class AzureOpenAILLM() :
 
         structured_llm = (
             self._llm
-            .with_structured_output(schema)
+            .with_structured_output(schema, method="function_calling")
             .with_config(configurable={"max_tokens": max_tokens})
         )
 

@@ -27,6 +27,7 @@ from kernel.adaptation.loop import AdaptationLoop
 from kernel.verification.verifier import InvariantVerifier
 from simulator.policy_engine import PolicyStore
 from services.llms.azure_openai import AzureOpenAILLM
+from services.llms.gemini import GeminiLLM
 from services.llms.mock import MockLLM
 
 ROOT     = pathlib.Path(__file__).parent.parent.parent
@@ -192,6 +193,7 @@ async def main() -> None:
         thresholds           = HealthThresholds(),
     )
 
+    #llm = GeminiLLM()
     #llm = AzureOpenAILLM("o4-mini")
     llm = MockLLM()
 

@@ -95,7 +95,7 @@ async def main():
             await asyncio.sleep(0.1)
 
     async def inject_disturbance():
-        await asyncio.sleep(7)   # let healthy baseline establish
+        await asyncio.sleep(8)   # let healthy baseline establish
         gateway_model.force_regime("G1", Regime.OUTAGE)
         print("[disturbance] G1 forced to OUTAGE")
 

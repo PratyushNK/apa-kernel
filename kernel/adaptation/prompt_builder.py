@@ -7,7 +7,11 @@ System prompt is fixed. User prompt is structured, not narrative.
 
 from __future__ import annotations
 import json
-from kernel.adaptation.schemas import AdaptationContext, CorrectionContext
+from kernel.adaptation.schemas import (
+  AdaptationContext,
+  AdaptationDecision,
+  CorrectionContext,
+)
 
 
 SYSTEM_PROMPT = """You are a payment routing policy optimizer.
@@ -26,6 +30,11 @@ CORRECTION_SYSTEM_PROMPT = """You are a payment routing policy optimizer.
 Your previous proposal violated invariant constraints.
 Correct only the fields that caused violations. Keep all other fields identical.
 Output JSON only."""
+
+
+THETA_SYSTEM_PROMPT = """You are a payment routing policy parameter setter.
+Given a reasoning analysis of a degraded payment system, return the exact policy vector parameters to implement the proposed fix.
+Return only the policy vector fields. No explanation."""
 
 
 def build_adaptation_prompt(ctx: AdaptationContext) -> str:
@@ -59,7 +68,38 @@ Current policy vector:
 {json.dumps(ctx.current_theta, indent=2)}
 
 Objective: {ctx.objective}
+
+You MUST return proposed_theta with ALL of these exact fields:
+{{
+  "reasoning": "your reasoning here",
+  "confidence": 0.9,
+  "expected_improvement": "what will improve",
+  "proposed_theta": {{
+    "provider_priority": [...],
+    "provider_weights": {{"G1": 0.0, "G2": 0.0}},
+    "weight_learning_rate": 0.0,
+    "max_retry": 0,
+    "retryable_statuses": [...],
+    "base_backoff_ms": 0,
+    "backoff_multiplier": 0.0,
+    "retry_budget_window_ms": 0,
+    "max_retries_per_window": 0
+  }}
+}}
+
 Propose minimal policy changes to restore system health."""
+
+
+def build_theta_prompt(decision: AdaptationDecision, current_theta: dict) -> str:
+    return f"""Reasoning: {decision.reasoning}
+Expected improvement: {decision.expected_improvement}
+Confidence: {decision.confidence}
+
+Current policy vector:
+{json.dumps(current_theta, indent=2)}
+
+Return the updated policy vector implementing the above reasoning.
+All fields are required."""
 
 
 def build_correction_prompt(ctx: CorrectionContext) -> str:
@@ -67,7 +107,7 @@ def build_correction_prompt(ctx: CorrectionContext) -> str:
 Violations: {ctx.violations}
 
 Original proposal:
-{json.dumps(ctx.original_decision.proposed_theta, indent=2)}
+{json.dumps(ctx.rejected_theta.model_dump(), indent=2)}
 
 {ctx.correction_hint}
 Correct and resubmit."""

@@ -24,21 +24,22 @@ Each node is a pure async function:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from typing import Optional
 
 from interfaces.llm import LLM
 from kernel.adaptation.schemas import (
     AdaptationContext,
     AdaptationDecision,
+    PolicyVectorSchema,
     AdaptationState,
     CorrectionContext,
 )
 from kernel.adaptation.prompt_builder import (
     SYSTEM_PROMPT,
     CORRECTION_SYSTEM_PROMPT,
+    THETA_SYSTEM_PROMPT,
     build_adaptation_prompt,
+    build_theta_prompt,
     build_correction_prompt,
 )
 from kernel.aggregator.aggregator import Aggregator
@@ -84,6 +85,11 @@ class AdaptationLoop:
         while state.status == "running":
             state = await self._fetch_metrics(state)
             state = await self._reason_and_propose(state)
+            if state.status != "running":
+                break
+            state = await self._propose_theta(state)
+            if state.status != "running":
+                break
             state = await self._verify_invariants(state)
 
             if not state.verification_pass:
@@ -128,28 +134,62 @@ class AdaptationLoop:
         return state
 
     # ------------------------------------------------------------------
-    # Node 2 — Reason and propose
+    # Node 2 — Reason and propose (Stage 1)
     # ------------------------------------------------------------------
 
     async def _reason_and_propose(self, state: AdaptationState) -> AdaptationState:
         prompt = build_adaptation_prompt(state.context)
 
-        logger.info("[adaptation] calling LLM for proposal")
+        logger.info("[adaptation] calling LLM for reasoning")
         decision = self._llm.generate_structured(
             schema        = AdaptationDecision,
             prompt        = prompt,
             system_prompt = SYSTEM_PROMPT,
-            max_tokens    = 250,
+            max_tokens    = 300,
         )
 
+        if decision is None:
+            logger.error("[adaptation] LLM returned None — structured output failed")
+            state.status = "failed"
+            return state
+
         state.decision          = decision
+        state.proposed_theta    = None
         state.verification_pass = False
         state.violations        = []
 
         logger.info(
-            f"[adaptation] proposal received — "
+            f"[adaptation] reasoning received — "
             f"confidence={decision.confidence:.2f} "
             f"reasoning='{decision.reasoning[:60]}...'"
+        )
+        return state
+
+    async def _propose_theta(self, state: AdaptationState) -> AdaptationState:
+        if state.decision is None:
+            state.status = "failed"
+            logger.error("[adaptation] no reasoning decision for theta proposal")
+            return state
+
+        prompt = build_theta_prompt(state.decision, state.context.current_theta)
+
+        logger.info("[adaptation] calling LLM for policy vector")
+        proposed_theta = self._llm.generate_structured(
+            schema        = PolicyVectorSchema,
+            prompt        = prompt,
+            system_prompt = THETA_SYSTEM_PROMPT,
+            max_tokens    = 300,
+        )
+
+        if proposed_theta is None:
+            logger.error("[adaptation] LLM returned None — policy vector generation failed")
+            state.status = "failed"
+            return state
+
+        state.proposed_theta = proposed_theta
+        logger.info(
+            f"[adaptation] policy vector received — "
+            f"weights={proposed_theta.provider_weights}"
         )
         return state
 
@@ -158,11 +198,11 @@ class AdaptationLoop:
     # ------------------------------------------------------------------
 
     async def _verify_invariants(self, state: AdaptationState) -> AdaptationState:
-        if state.decision is None:
+        if state.proposed_theta is None:
             state.status = "failed"
             return state
 
-        is_valid, violations = self._verifier.check(state.decision.proposed_theta)
+        is_valid, violations = self._verifier.check(state.proposed_theta.model_dump())
         state.verification_pass = is_valid
         state.violations        = violations
 
@@ -182,29 +222,34 @@ class AdaptationLoop:
             logger.warning("[adaptation] max corrections reached")
             return state
         
-        if state.decision is None:
+        if state.proposed_theta is None:
             state.status = "failed"
             return state
 
         correction_ctx = CorrectionContext(
-            original_decision = state.decision,
+            rejected_theta    = state.proposed_theta,
             violations        = state.violations,
         )
         prompt = build_correction_prompt(correction_ctx)
 
         logger.info("[adaptation] calling LLM for correction")
-        corrected = self._llm.generate_structured(
-            schema        = AdaptationDecision,
+        corrected_theta = self._llm.generate_structured(
+            schema        = PolicyVectorSchema,
             prompt        = prompt,
             system_prompt = CORRECTION_SYSTEM_PROMPT,
-            max_tokens    = 200,
+            max_tokens    = 300,
         )
 
-        state.decision          = corrected
+        if corrected_theta is None:
+            logger.error("[adaptation] correction generation failed")
+            state.status = "failed"
+            return state
+
+        state.proposed_theta    = corrected_theta
         state.correction_count += 1
 
         # Re-verify correction
-        is_valid, violations    = self._verifier.check(corrected.proposed_theta)
+        is_valid, violations    = self._verifier.check(corrected_theta.model_dump())
         state.verification_pass = is_valid
         state.violations        = violations
 
@@ -220,12 +265,12 @@ class AdaptationLoop:
     # ------------------------------------------------------------------
 
     async def _deploy_policy(self, state: AdaptationState) -> AdaptationState:
-        if state.decision is None:
+        if state.proposed_theta is None:
             state.status = "failed"
             return state
 
         try:
-            new_theta = PolicyVector(**state.decision.proposed_theta)
+            new_theta = PolicyVector(**state.proposed_theta.model_dump())
             self._policy_store.update(new_theta)
             logger.info(
                 f"[adaptation] policy deployed — "
