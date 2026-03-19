@@ -13,6 +13,7 @@ from event_stream import EventStream, JSONLBackend
 from transaction_simulator import TransactionSimulator, SimulatorConfig
 from kernel.aggregator.aggregator import Aggregator, HealthThresholds
 import pathlib
+import time
 
 ROOT = pathlib.Path(__file__).parent.parent  # apa-kernel/
 STREAMS  = ROOT / "data" / "streams"
@@ -24,8 +25,8 @@ store_path      = str(POLICIES / "policy.json")
 
 aggregator = Aggregator(
     log_path             = aggregator_path,
-    window_size_ms       = 60_000,
-    heartbeat_interval_s = 5.0,
+    window_size_ms       = 5_000,
+    heartbeat_interval_s = 2.0,
     thresholds           = HealthThresholds(),
 )
 
@@ -65,10 +66,12 @@ async def main():
 
     # --- Simulator ---
     config = SimulatorConfig(
-        max_transactions = 400,
-        speed_multiplier = 10.0,    # 10x faster than real time
-        clock_start_ms   = 0,
+        max_transactions  = 600,
+        speed_multiplier  = 1,    # 10x faster than real time
+        clock_start_ms    = 0,
+        real_tick_delay_s = 0.05
     )
+
     simulator = TransactionSimulator(
         config             = config,
         arrival_process    = arrival_process,
@@ -77,6 +80,8 @@ async def main():
         gateway_model      = gateway_model,
         event_stream       = event_stream,
     )
+
+    
 
     # --- Live tail printer (runs alongside simulator) ---
     async def print_tail():
@@ -90,13 +95,16 @@ async def main():
             await asyncio.sleep(0.1)
 
     async def inject_disturbance():
-        await asyncio.sleep(0.005)   # let healthy baseline establish
+        await asyncio.sleep(7)   # let healthy baseline establish
         gateway_model.force_regime("G1", Regime.OUTAGE)
         print("[disturbance] G1 forced to OUTAGE")
 
-    async def run_simulation():
+    async def run_simulation() -> None:
+        start = time.time()
         await simulator.run()
-        aggregator.stop()          # stop heartbeat when simulator finishes
+        elapsed = time.time() - start
+        print(f"[simulator] completed in {elapsed:.2f} seconds")
+        aggregator.stop()
 
     try:
         await asyncio.gather(

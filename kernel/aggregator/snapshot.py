@@ -68,7 +68,7 @@ class MetricsSnapshot:
 
     @property
     def has_sufficient_data(self) -> bool:
-        return self.window_txn_count >= 50
+        return self.window_txn_count >= 20
 
 
 @dataclass(frozen=True, slots=True)

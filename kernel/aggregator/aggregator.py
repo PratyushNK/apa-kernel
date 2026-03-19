@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Optional
+import logging
 
 from kernel.aggregator.snapshot import (
     MetricsSnapshot,
@@ -53,6 +54,14 @@ class Aggregator:
         self._gateway_regimes     : dict[str, str] = {}
         self._running             : bool = False
 
+        self._breach_detected: bool = False
+
+    def pop_breach(self) -> bool:
+        """Returns True if breach was detected since last call. Clears the flag."""
+        result = self._breach_detected
+        self._breach_detected = False
+        return result
+
     # ------------------------------------------------------------------
     # 1. Async heartbeat loop — runs alongside simulator
     # ------------------------------------------------------------------
@@ -68,14 +77,26 @@ class Aggregator:
 
     def _tick(self) -> None:
         snapshot = self._reader.compute(self._window_size_ms, self._max_retry)
+        
+        logging.info(
+            f"[aggregator] tick — "
+            f"txn_count={snapshot.window_txn_count} "
+            f"approval={snapshot.approval_rate:.3f} "
+            f"any_breach={snapshot.invariant_risk.any_breach} "
+            f"healthy_baseline={'set' if self._last_healthy else 'none'}"
+        )
+        
         if not snapshot.has_sufficient_data:
             return
-        # Only update last_healthy before setting current
-        if self._current is not None and self._is_healthy(snapshot):
-            self._last_healthy = self._current
-        elif self._last_healthy is None and self._is_healthy(snapshot):
-            self._last_healthy = snapshot
+        
         self._current = snapshot
+        if snapshot.invariant_risk.any_breach:
+            self._breach_detected = True    # sticky flag — stays True until engine clears it
+        if self._is_healthy(snapshot):
+            self._last_healthy = snapshot
+
+        
+        
 
     # ------------------------------------------------------------------
     # 2. On-demand service — called by Adaptation Scheduler
