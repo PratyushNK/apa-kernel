@@ -51,6 +51,7 @@ class KernelEngine:
         cooldown_s       : float = 30.0,
         min_approval_rate: float = HealthThresholds.min_approval_rate,
         max_cycles_cooldown_s: float = 60.0,
+        failure_backoff_s: float = 20.0,
     ):
         self._aggregator         = aggregator
         self._adaptation_loop    = adaptation_loop
@@ -59,10 +60,12 @@ class KernelEngine:
         self._running            : bool = False
         self._cooldown_s         = cooldown_s
         self._max_cycles_cooldown_s = max_cycles_cooldown_s
+        self._failure_backoff_s  = failure_backoff_s
         self._active_cooldown_s  = cooldown_s
         self._min_approval_rate  = min_approval_rate
         self._mode               = self.MODE_MONITORING
         self._last_success_at_s  : float | None = None
+        self._allow_degraded_trigger_in_cooldown = True
 
     async def run(self) -> None:
         self._running = True
@@ -112,6 +115,7 @@ class KernelEngine:
                 self._mode = self.MODE_COOLDOWN
                 self._active_cooldown_s = self._cooldown_s
                 self._last_success_at_s = time.monotonic()
+                self._allow_degraded_trigger_in_cooldown = True
                 logging.info(
                     f"[engine] entering cooldown for {self._active_cooldown_s:.0f}s"
                 )
@@ -119,18 +123,27 @@ class KernelEngine:
                 self._mode = self.MODE_COOLDOWN
                 self._active_cooldown_s = self._max_cycles_cooldown_s
                 self._last_success_at_s = time.monotonic()
+                self._allow_degraded_trigger_in_cooldown = True
                 logging.info(
                     f"[engine] entering cooldown for {self._active_cooldown_s:.0f}s"
                 )
             else:
-                self._mode = self.MODE_MONITORING
-                self._last_success_at_s = None
-                self._active_cooldown_s = self._cooldown_s
+                self._mode = self.MODE_COOLDOWN
+                self._active_cooldown_s = self._failure_backoff_s
+                self._last_success_at_s = time.monotonic()
+                self._allow_degraded_trigger_in_cooldown = False
+                logging.info(
+                    f"[engine] entering failure backoff for {self._active_cooldown_s:.0f}s"
+                )
         except Exception as e:
             logging.error(f"[engine] adaptation error — {e}")
-            self._mode = self.MODE_MONITORING
-            self._last_success_at_s = None
-            self._active_cooldown_s = self._cooldown_s
+            self._mode = self.MODE_COOLDOWN
+            self._active_cooldown_s = self._failure_backoff_s
+            self._last_success_at_s = time.monotonic()
+            self._allow_degraded_trigger_in_cooldown = False
+            logging.info(
+                f"[engine] entering failure backoff for {self._active_cooldown_s:.0f}s"
+            )
         finally:
             self._adaptation_running = False
 
@@ -153,8 +166,15 @@ class KernelEngine:
                 self._mode = self.MODE_MONITORING
                 self._last_success_at_s = None
                 self._active_cooldown_s = self._cooldown_s
+                self._allow_degraded_trigger_in_cooldown = True
                 logging.info("[engine] cooldown expired — resuming monitoring")
             else:
+                if not self._allow_degraded_trigger_in_cooldown:
+                    logging.info(
+                        f"[engine] trigger check — mode={self._mode} "
+                        f"backoff_active=True result=False"
+                    )
+                    return False
                 degraded = snapshot.approval_rate < self._min_approval_rate
                 logging.info(
                     f"[engine] trigger check — mode={self._mode} "
@@ -194,8 +214,8 @@ async def main() -> None:
     )
 
     #llm = GeminiLLM()
-    #llm = AzureOpenAILLM("o4-mini")
-    llm = MockLLM()
+    llm = AzureOpenAILLM("o4-mini")
+    #llm = MockLLM()
 
     adaptation_loop = AdaptationLoop(
         llm          = llm,

@@ -66,7 +66,7 @@ async def main():
 
     # --- Simulator ---
     config = SimulatorConfig(
-        max_transactions  = 600,
+        max_transactions  = 800,
         speed_multiplier  = 1,    # 10x faster than real time
         clock_start_ms    = 0,
         real_tick_delay_s = 0.05
@@ -95,7 +95,7 @@ async def main():
             await asyncio.sleep(0.1)
 
     async def inject_disturbance():
-        await asyncio.sleep(8)   # let healthy baseline establish
+        await asyncio.sleep(10)   # let healthy baseline establish
         gateway_model.force_regime("G1", Regime.OUTAGE)
         print("[disturbance] G1 forced to OUTAGE")
 

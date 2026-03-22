@@ -22,19 +22,18 @@ Rules:
 - Never set provider_weights values that don't sum to 1.0
 - Never set base_backoff_ms < 10 or > 5000
 - Never set timeout thresholds outside 50-5000ms range
-- Prefer routing away from failing providers over aggressive retry increases
-Output JSON only. No explanation outside the reasoning field."""
+- Prefer routing away from failing providers over aggressive retry increases"""
 
 
 CORRECTION_SYSTEM_PROMPT = """You are a payment routing policy optimizer.
 Your previous proposal violated invariant constraints.
 Correct only the fields that caused violations. Keep all other fields identical.
-Output JSON only."""
+"""
 
 
 THETA_SYSTEM_PROMPT = """You are a payment routing policy parameter setter.
 Given a reasoning analysis of a degraded payment system, return the exact policy vector parameters to implement the proposed fix.
-Return only the policy vector fields. No explanation."""
+Return only the policy vector parameters needed to apply the fix."""
 
 
 def build_adaptation_prompt(ctx: AdaptationContext) -> str:
@@ -69,25 +68,10 @@ Current policy vector:
 
 Objective: {ctx.objective}
 
-You MUST return proposed_theta with ALL of these exact fields:
-{{
-  "reasoning": "your reasoning here",
-  "confidence": 0.9,
-  "expected_improvement": "what will improve",
-  "proposed_theta": {{
-    "provider_priority": [...],
-    "provider_weights": {{"G1": 0.0, "G2": 0.0}},
-    "weight_learning_rate": 0.0,
-    "max_retry": 0,
-    "retryable_statuses": [...],
-    "base_backoff_ms": 0,
-    "backoff_multiplier": 0.0,
-    "retry_budget_window_ms": 0,
-    "max_retries_per_window": 0
-  }}
-}}
-
-Propose minimal policy changes to restore system health."""
+Assess system state and decide the smallest effective adaptation.
+Reason about likely causes, expected impact, and confidence.
+Do not propose policy vector values in this stage.
+Return the answer via the structured response channel."""
 
 
 def build_theta_prompt(decision: AdaptationDecision, current_theta: dict) -> str:
@@ -98,8 +82,10 @@ Confidence: {decision.confidence}
 Current policy vector:
 {json.dumps(current_theta, indent=2)}
 
-Return the updated policy vector implementing the above reasoning.
-All fields are required."""
+Propose policy vector parameter updates that implement the reasoning.
+Prefer minimal changes.
+You may leave unchanged fields untouched.
+Return the answer via the structured response channel."""
 
 
 def build_correction_prompt(ctx: CorrectionContext) -> str:
@@ -110,4 +96,5 @@ Original proposal:
 {json.dumps(ctx.rejected_theta.model_dump(), indent=2)}
 
 {ctx.correction_hint}
-Correct and resubmit."""
+Correct and resubmit.
+Return the answer via the structured response channel."""

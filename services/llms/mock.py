@@ -20,7 +20,12 @@ class MockLLM:
         )
     
     def generate(self, prompt, system_prompt=None, max_tokens=4000) -> str:
-        return "mock response"
+        # Mock token accounting: simple word counts
+        input_tokens = len(prompt.split())
+        output = "mock response"
+        output_tokens = len(output.split())
+        print(f"\nInput tokens: {input_tokens}\nOutput tokens: {output_tokens}\n")
+        return output
 
     def chat(self, message) -> str:
         return "mock response"

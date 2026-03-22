@@ -30,6 +30,7 @@ from interfaces.llm import LLM
 from kernel.adaptation.schemas import (
     AdaptationContext,
     AdaptationDecision,
+    PolicyPatchSchema,
     PolicyVectorSchema,
     AdaptationState,
     CorrectionContext,
@@ -139,19 +140,32 @@ class AdaptationLoop:
 
     async def _reason_and_propose(self, state: AdaptationState) -> AdaptationState:
         prompt = build_adaptation_prompt(state.context)
+        logger.debug(f"[adaptation] adaptation prompt length={len(prompt)}")
+        logger.debug("[adaptation] adaptation prompt (trunc): %s", prompt[:1000])
 
         logger.info("[adaptation] calling LLM for reasoning")
-        decision = self._llm.generate_structured(
-            schema        = AdaptationDecision,
-            prompt        = prompt,
-            system_prompt = SYSTEM_PROMPT,
-            max_tokens    = 300,
-        )
+        try:
+            decision = self._llm.generate_structured(
+                schema        = AdaptationDecision,
+                prompt        = prompt,
+                system_prompt = SYSTEM_PROMPT,
+                max_tokens    = 250,
+            )
+        except Exception:
+            logger.exception("[adaptation] exception calling LLM for reasoning")
+            state.status = "failed"
+            return state
 
         if decision is None:
             logger.error("[adaptation] LLM returned None — structured output failed")
             state.status = "failed"
             return state
+
+        # Log the structured response for debugging
+        try:
+            logger.debug("[adaptation] decision model_dump: %s", decision.model_dump())
+        except Exception:
+            logger.debug("[adaptation] decision repr: %s", repr(decision))
 
         state.decision          = decision
         state.proposed_theta    = None
@@ -172,24 +186,43 @@ class AdaptationLoop:
             return state
 
         prompt = build_theta_prompt(state.decision, state.context.current_theta)
+        logger.debug(f"[adaptation] theta prompt length={len(prompt)}")
+        logger.debug("[adaptation] theta prompt (trunc): %s", prompt[:1000])
 
         logger.info("[adaptation] calling LLM for policy vector")
-        proposed_theta = self._llm.generate_structured(
-            schema        = PolicyVectorSchema,
-            prompt        = prompt,
-            system_prompt = THETA_SYSTEM_PROMPT,
-            max_tokens    = 300,
-        )
+        try:
+            theta_patch = self._llm.generate_structured(
+                schema        = PolicyPatchSchema,
+                prompt        = prompt,
+                system_prompt = THETA_SYSTEM_PROMPT,
+                max_tokens    = 300,
+            )
+        except Exception:
+            logger.exception("[adaptation] exception calling LLM for policy vector")
+            state.status = "failed"
+            return state
 
-        if proposed_theta is None:
+        if theta_patch is None:
             logger.error("[adaptation] LLM returned None — policy vector generation failed")
             state.status = "failed"
             return state
 
-        state.proposed_theta = proposed_theta
+        try:
+            try:
+                logger.debug("[adaptation] theta_patch model_dump: %s", theta_patch.model_dump(exclude_none=True))
+            except Exception:
+                logger.debug("[adaptation] theta_patch repr: %s", repr(theta_patch))
+            merged_theta = self._merge_theta_patch(state.context.current_theta, theta_patch)
+            logger.debug("[adaptation] merged_theta snapshot: %s", {k: merged_theta.get(k) for k in list(merged_theta)[:10]})
+            state.proposed_theta = PolicyVectorSchema(**merged_theta)
+        except Exception as e:
+            logger.exception(f"[adaptation] policy vector invalid after merge — {e}")
+            state.status = "failed"
+            return state
+
         logger.info(
             f"[adaptation] policy vector received — "
-            f"weights={proposed_theta.provider_weights}"
+            f"weights={state.proposed_theta.provider_weights}"
         )
         return state
 
@@ -201,6 +234,12 @@ class AdaptationLoop:
         if state.proposed_theta is None:
             state.status = "failed"
             return state
+
+        try:
+            proposed_dump = state.proposed_theta.model_dump()
+            logger.debug("[adaptation] proposed_theta dump: %s", proposed_dump)
+        except Exception:
+            logger.debug("[adaptation] could not dump proposed_theta")
 
         is_valid, violations = self._verifier.check(state.proposed_theta.model_dump())
         state.verification_pass = is_valid
@@ -231,17 +270,38 @@ class AdaptationLoop:
             violations        = state.violations,
         )
         prompt = build_correction_prompt(correction_ctx)
+        logger.debug(f"[adaptation] correction prompt length={len(prompt)}")
+        logger.debug("[adaptation] correction prompt (trunc): %s", prompt[:1000])
 
         logger.info("[adaptation] calling LLM for correction")
-        corrected_theta = self._llm.generate_structured(
-            schema        = PolicyVectorSchema,
-            prompt        = prompt,
-            system_prompt = CORRECTION_SYSTEM_PROMPT,
-            max_tokens    = 300,
-        )
+        try:
+            corrected_patch = self._llm.generate_structured(
+                schema        = PolicyPatchSchema,
+                prompt        = prompt,
+                system_prompt = CORRECTION_SYSTEM_PROMPT,
+                max_tokens    = 300,
+            )
+        except Exception:
+            logger.exception("[adaptation] exception calling LLM for correction")
+            state.status = "failed"
+            return state
 
-        if corrected_theta is None:
+        if corrected_patch is None:
             logger.error("[adaptation] correction generation failed")
+            state.status = "failed"
+            return state
+
+        try:
+            try:
+                logger.debug("[adaptation] corrected_patch model_dump: %s", corrected_patch.model_dump(exclude_none=True))
+            except Exception:
+                logger.debug("[adaptation] corrected_patch repr: %s", repr(corrected_patch))
+            base_theta = state.proposed_theta.model_dump()
+            merged_theta = self._merge_theta_patch(base_theta, corrected_patch)
+            logger.debug("[adaptation] merged corrected theta keys: %s", list(merged_theta.keys()))
+            corrected_theta = PolicyVectorSchema(**merged_theta)
+        except Exception as e:
+            logger.exception(f"[adaptation] corrected policy invalid after merge — {e}")
             state.status = "failed"
             return state
 
@@ -363,3 +423,12 @@ class AdaptationLoop:
                 "I7_sla_breach"     : risk.I7_sla_breach,
             }.items() if val
         ]
+
+    @staticmethod
+    def _merge_theta_patch(current_theta: dict, patch: PolicyPatchSchema) -> dict:
+        patch_data = patch.model_dump(exclude_none=True)
+        logger.debug("[adaptation] merging theta patch: %s", patch_data)
+        merged = dict(current_theta)
+        merged.update(patch_data)
+        logger.debug("[adaptation] merged theta preview: %s", {k: merged.get(k) for k in list(merged)[:10]})
+        return merged

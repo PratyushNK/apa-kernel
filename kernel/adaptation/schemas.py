@@ -6,7 +6,7 @@ Kept minimal for token efficiency.
 """
 
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from typing import Optional
 
 
@@ -58,6 +58,25 @@ class PolicyVectorSchema(BaseModel):
     backoff_multiplier     : float            = Field(ge=1.0, le=5.0, description="Exponential backoff multiplier 1.0-5.0")
     retry_budget_window_ms : int              = Field(ge=1000, description="Retry budget window in ms")
     max_retries_per_window : int              = Field(ge=1, description="Max retries allowed per window")
+
+
+class PolicyPatchSchema(BaseModel):
+    """
+    Relaxed stage-2 output schema.
+    Allows partial updates and common alias keys from model outputs.
+    """
+    provider_priority      : Optional[list[str]]        = Field(default=None)
+    provider_weights       : Optional[dict[str, float]] = Field(
+        default=None,
+        validation_alias=AliasChoices("provider_weights", "weights", "routing_weights"),
+    )
+    weight_learning_rate   : Optional[float]            = Field(default=None, ge=0.0, le=1.0)
+    max_retry              : Optional[int]              = Field(default=None, ge=1, le=5)
+    retryable_statuses     : Optional[list[str]]        = Field(default=None)
+    base_backoff_ms        : Optional[int]              = Field(default=None, ge=10, le=5000)
+    backoff_multiplier     : Optional[float]            = Field(default=None, ge=1.0, le=5.0)
+    retry_budget_window_ms : Optional[int]              = Field(default=None, ge=1000)
+    max_retries_per_window : Optional[int]              = Field(default=None, ge=1)
 
 
 class AdaptationDecision(BaseModel):

@@ -44,10 +44,43 @@ class AzureOpenAILLM() :
         chain = self._llm | StrOutputParser()
 
         # max_tokens must be bound via config
-        return chain.invoke(
-            messages, 
-            config={"configurable": {"max_tokens": max_tokens}}
+        result = chain.invoke(
+            messages,
+            config={"configurable": {"max_tokens": max_tokens}},
         )
+
+        # Attempt to extract token usage; fall back to word-count heuristic
+        input_tokens = None
+        output_tokens = None
+        try:
+            llm_out = getattr(result, "llm_output", None)
+            if llm_out and isinstance(llm_out, dict):
+                # common shapes
+                usage = llm_out.get("token_usage") or llm_out.get("usage")
+                if isinstance(usage, dict):
+                    input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens")
+                    output_tokens = usage.get("completion_tokens") or usage.get("output_tokens") or usage.get("total_tokens")
+            raw = getattr(result, "raw_response", None)
+            if (input_tokens is None or output_tokens is None) and isinstance(raw, dict):
+                usage = raw.get("usage")
+                if isinstance(usage, dict):
+                    input_tokens = input_tokens or usage.get("prompt_tokens")
+                    output_tokens = output_tokens or usage.get("completion_tokens") or usage.get("total_tokens")
+        except Exception:
+            pass
+
+        if input_tokens is None or output_tokens is None:
+            # Heuristic fallback: word counts
+            try:
+                input_tokens = len(prompt.split())
+                output_tokens = len(str(result).split())
+            except Exception:
+                input_tokens = "unknown"
+                output_tokens = "unknown"
+
+        print(f"\nInput tokens: {input_tokens}\nOutput tokens: {output_tokens}\n")
+
+        return result
     
     def generate_structured(self, schema: Type[T], prompt: str, system_prompt: str | None = None, max_tokens: int = 4000) -> T:
         messages = []
@@ -64,6 +97,35 @@ class AzureOpenAILLM() :
         )
 
         result = structured_llm.invoke(messages)
+
+        # Attempt to extract token usage from structured result
+        input_tokens = None
+        output_tokens = None
+        try:
+            llm_out = getattr(result, "llm_output", None)
+            if llm_out and isinstance(llm_out, dict):
+                usage = llm_out.get("token_usage") or llm_out.get("usage")
+                if isinstance(usage, dict):
+                    input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens")
+                    output_tokens = usage.get("completion_tokens") or usage.get("output_tokens") or usage.get("total_tokens")
+            raw = getattr(result, "raw_response", None)
+            if (input_tokens is None or output_tokens is None) and isinstance(raw, dict):
+                usage = raw.get("usage")
+                if isinstance(usage, dict):
+                    input_tokens = input_tokens or usage.get("prompt_tokens")
+                    output_tokens = output_tokens or usage.get("completion_tokens") or usage.get("total_tokens")
+        except Exception:
+            pass
+
+        if input_tokens is None or output_tokens is None:
+            try:
+                input_tokens = len(prompt.split())
+                output_tokens = len(str(result).split())
+            except Exception:
+                input_tokens = "unknown"
+                output_tokens = "unknown"
+
+        print(f"\nInput tokens: {input_tokens}\nOutput tokens: {output_tokens}\n")
 
         return cast(T, result)
 
