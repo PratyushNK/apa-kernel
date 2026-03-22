@@ -107,7 +107,9 @@ class TransactionEngine:
         # Drive state machine until terminal
         while ctx.state != TxnState.TERMINAL:
             if ctx.state == TxnState.ROUTE:
-                events.append(self._route(ctx, clock_ms, policy_engine))
+                event = self._route(ctx, clock_ms, policy_engine)
+                if event is not None:
+                    events.append(event)
 
             elif ctx.state == TxnState.ATTEMPT:
                 events.append(self._attempt(ctx, clock_ms))
@@ -139,23 +141,24 @@ class TransactionEngine:
             sla_deadline_ms = ctx.sla_deadline_ms,
     )
 
-    def _route(
-        self,
-        ctx          : TxnContext,
-        clock_ms     : int,
-        policy_engine,
-    ) -> BaseEvent:
-        t_start = clock_ms
-        ctx.active_provider = policy_engine.choose_provider(ctx.txn_id)
+    def _route(self, ctx, clock_ms, policy_engine) -> BaseEvent | None:
+        t_start  = clock_ms
+        provider = policy_engine.choose_provider(ctx.txn_id)
+    
+        if not provider:
+            # All providers DOWN — terminal, no route decision emitted
+            ctx.state = TxnState.TERMINAL
+            return None
+    
+        ctx.active_provider = provider
         ctx.state = TxnState.ATTEMPT
-        decision_latency = 2    # routing decision takes ~2ms
-
+    
         return route_decision(
             txn_id              = ctx.txn_id,
             decision_id         = f"dec_{uuid.uuid4().hex[:8]}",
             timestamp           = t_start,
-            selected_provider   = ctx.active_provider,
-            decision_latency_ms = decision_latency,
+            selected_provider   = provider,
+            decision_latency_ms = 2,
         )
 
     def _attempt(self, ctx: TxnContext, clock_ms: int) -> BaseEvent:

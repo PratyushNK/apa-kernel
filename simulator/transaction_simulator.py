@@ -17,9 +17,10 @@ from dataclasses import dataclass
 
 @dataclass
 class SimulatorConfig:
-    max_transactions  : int   = 10_000   # auto-terminate after N txns
-    speed_multiplier  : float = 1.0      # 1.0 = real-time, 10.0 = 10x faster
+    max_transactions  : int   = 1_000    # auto-terminate after N txns
+    speed_multiplier  : float = 1        # 1.0 = real-time, 10.0 = 10x faster
     clock_start_ms    : int   = 0        # simulated clock start (epoch ms)
+    real_tick_delay_s : float = 0.05
 
 
 class TransactionSimulator:
@@ -102,6 +103,8 @@ class TransactionSimulator:
         circuit_events = self.gateway_model.evaluate_circuits(self._clock_ms)
         if circuit_events:
             await self.event_stream.append(circuit_events)
+
+        await asyncio.sleep(self.config.real_tick_delay_s)
 
         # 5. Yield control — allows manual cancel signal to be received
         await asyncio.sleep(0)

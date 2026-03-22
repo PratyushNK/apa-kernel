@@ -106,5 +106,5 @@ class ArrivalProcess:
             "created_at": clock_ms,
             "amount"    : Decimal(str(round(random.uniform(10.0, 1000.0), 2))),
             "currency"  : "USD",
-            "sla_deadline_ms": clock_ms + 5_000,
+            "sla_deadline_ms": clock_ms + 500,
         }

@@ -6,3 +6,8 @@ build/
 dist/
 *.egg
 __pycache__/
+
+data/streams/*
+data/policies/*
+!data/streams/.gitkeep
+!data/policies/.gitkeep
