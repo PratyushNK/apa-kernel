@@ -10,6 +10,8 @@ dependencies = [
     "langchain-google-genai>=4.2.1",
     "langchain-openai>=1.1.11",
     "pydantic",
+    "pytest>=9.0.2",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]

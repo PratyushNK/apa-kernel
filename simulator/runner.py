@@ -3,6 +3,8 @@ simulator/runner.py
 Wires all components and runs the simulation.
 """
 
+import argparse
+import os
 import asyncio
 
 from arrival_process import ArrivalProcess, ArrivalConfig, BurstConfig
@@ -30,15 +32,25 @@ aggregator = Aggregator(
     thresholds           = HealthThresholds(),
 )
 
-async def main():
+async def main(debug_eval_ms: int | None = None):
     events_path = STREAMS / "events.jsonl"
     if events_path.exists():
         events_path.unlink()
 
     # --- Gateway setup ---
+    # Allow a short debug eval window via CLI flag or env var for rapid testing.
+    env_ms = os.getenv("SIM_DEBUG_EVAL_MS")
+    if debug_eval_ms is None and env_ms is not None:
+        try:
+            debug_eval_ms = int(env_ms)
+        except Exception:
+            debug_eval_ms = None
+
+    default_eval = 5_000 if debug_eval_ms is None else int(debug_eval_ms)
+
     providers = [
-        ProviderConfig(name="G1"),
-        ProviderConfig(name="G2"),
+        ProviderConfig(name="G1", eval_window_ms=default_eval),
+        ProviderConfig(name="G2", eval_window_ms=default_eval),
     ]
     gateway_model = GatewayModel(providers)
 
@@ -122,4 +134,17 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Run the transaction simulator")
+    parser.add_argument("--debug-eval-ms", type=int, default=None,
+                        help="Shorten provider eval window (ms) for debugging")
+    args = parser.parse_args()
+    # prefer CLI flag, fall back to env var `SIM_DEBUG_EVAL_MS`
+    cli_value = args.debug_eval_ms
+    env_value = os.getenv("SIM_DEBUG_EVAL_MS")
+    try:
+        env_value = int(env_value) if env_value is not None else None
+    except Exception:
+        env_value = None
+
+    chosen = cli_value if cli_value is not None else env_value
+    asyncio.run(main(debug_eval_ms=chosen))

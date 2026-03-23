@@ -248,7 +248,12 @@ class AdaptationLoop:
         if is_valid:
             logger.info("[adaptation] verification passed")
         else:
-            logger.warning(f"[adaptation] verification failed — {violations}")
+            # Distinguish TLC counterexample vs Python fallback violations
+            tlc_indicators = ("TLC counterexample", "TLC attempt error", "TLC check failed")
+            if any(any(ind in v for ind in tlc_indicators) for v in violations):
+                logger.warning("[adaptation] verification failed (TLC) — %s", violations)
+            else:
+                logger.warning("[adaptation] verification failed (Python fallback) — %s", violations)
 
         return state
 
