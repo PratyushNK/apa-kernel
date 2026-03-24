@@ -168,6 +168,14 @@ function updateEngine(payload) {
     return { ...entry, line: `[${ts}] ${entry.message || ""}` };
   });
   toLines("adaptationLog", adaptation, (entry) => entry.type || "reasoning");
+
+  // show a short textual reason for the adaptation status when provided by backend
+  const reasonEl = document.getElementById("adaptationReason");
+  if (reasonEl) {
+    const r = payload.adaptation_status_reason || "-";
+    // show only the message part if it's a kernel log line with timestamp
+    reasonEl.textContent = r;
+  }
 }
 
 function updatePolicy(policy) {

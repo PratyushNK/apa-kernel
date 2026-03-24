@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 MAX_CYCLES     = 3
 MAX_CORRECTIONS = 1
-OBSERVE_WAIT_S  = 4.0   # seconds to wait before observing outcome
+OBSERVE_WAIT_S  = 6.0   # seconds to wait before observing outcome
 
 
 class AdaptationLoop:
@@ -62,11 +62,15 @@ class AdaptationLoop:
         aggregator   : Aggregator,
         policy_store : PolicyStore,
         verifier     : InvariantVerifier,
+        strict_recovery: bool = True,
+        verifier_timeout_s: float = 10.0,
     ):
         self._llm          = llm
         self._aggregator   = aggregator
         self._policy_store = policy_store
         self._verifier     = verifier
+        self._strict_recovery = strict_recovery
+        self._verifier_timeout_s = verifier_timeout_s
 
     # ------------------------------------------------------------------
     # Entry point
@@ -247,14 +251,22 @@ class AdaptationLoop:
         if state.proposed_theta is None:
             state.status = "failed"
             return state
-
         try:
             proposed_dump = state.proposed_theta.model_dump()
             logger.debug("[adaptation] proposed_theta dump: %s", proposed_dump)
         except Exception:
             logger.debug("[adaptation] could not dump proposed_theta")
 
-        is_valid, violations = self._verifier.check(state.proposed_theta.model_dump())
+        # Run verifier in a thread with timeout to avoid blocking the loop
+        try:
+            is_valid, violations = await asyncio.wait_for(
+                asyncio.to_thread(self._verifier.check, state.proposed_theta.model_dump()),
+                timeout=self._verifier_timeout_s,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("[adaptation] verification timed out after %.1fs", self._verifier_timeout_s)
+            is_valid = False
+            violations = [f"TLC timeout after {self._verifier_timeout_s:.1f}s"]
         state.verification_pass = is_valid
         state.violations        = violations
 
@@ -396,11 +408,24 @@ class AdaptationLoop:
             logger.debug("[adaptation] failed to emit observe snapshot diagnostics")
 
         if not snapshot.invariant_risk.any_breach:
-            state.status = "success"
-            logger.info(
-                f"[adaptation] recovery confirmed — "
-                f"approval_rate={snapshot.approval_rate:.3f}"
-            )
+            recovered = True
+            if self._strict_recovery:
+                try:
+                    recovered = self._aggregator._is_healthy(snapshot)
+                except Exception:
+                    recovered = False
+
+            if recovered:
+                state.status = "success"
+                logger.info(
+                    f"[adaptation] recovery confirmed — "
+                    f"approval_rate={snapshot.approval_rate:.3f}"
+                )
+            else:
+                logger.info(
+                    f"[adaptation] invariants cleared but health not fully recovered — "
+                    f"approval_rate={snapshot.approval_rate:.3f}"
+                )
         else:
             logger.info(
                 f"[adaptation] not yet recovered — "

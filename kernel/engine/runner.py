@@ -65,7 +65,10 @@ class KernelEngine:
         self._min_approval_rate  = min_approval_rate
         self._mode               = self.MODE_MONITORING
         self._last_success_at_s  : float | None = None
-        self._allow_degraded_trigger_in_cooldown = True
+        # conservative by default: disallow degraded triggers during cooldown
+        self._allow_degraded_trigger_in_cooldown = False
+        # margin used when permitting degraded triggers after exhausting cycles
+        self._degraded_margin = 0.05
 
     async def run(self) -> None:
         self._running = True
@@ -83,6 +86,12 @@ class KernelEngine:
                 continue
 
             if self._should_trigger_cure(snapshot):
+                # Explicitly clear the aggregator's sticky breach now that
+                # adaptation will start (adaptation loop owns recovery lifecycle).
+                try:
+                    self._aggregator.clear_breach_on_adaptation_start()
+                except Exception:
+                    pass
                 logging.info(
                     f"[engine] cure trigger — "
                     f"approval_rate={snapshot.approval_rate:.3f}"
@@ -158,9 +167,13 @@ class KernelEngine:
             )
             return False
 
-        # During cooldown, ignore sticky breach and only trigger on real degradation.
+        # During cooldown, inspect sticky breach but do not clear it here.
         if self._mode == self.MODE_COOLDOWN:
-            self._aggregator.pop_breach()
+            breach_present = False
+            try:
+                breach_present = self._aggregator.peek_breach()
+            except Exception:
+                breach_present = False
 
             elapsed = 0.0
             if self._last_success_at_s is not None:
@@ -169,7 +182,8 @@ class KernelEngine:
                 self._mode = self.MODE_MONITORING
                 self._last_success_at_s = None
                 self._active_cooldown_s = self._cooldown_s
-                self._allow_degraded_trigger_in_cooldown = True
+                # reset conservatism after cooldown
+                self._allow_degraded_trigger_in_cooldown = False
                 logging.info("[engine] cooldown expired — resuming monitoring")
             else:
                 if not self._allow_degraded_trigger_in_cooldown:
@@ -178,16 +192,23 @@ class KernelEngine:
                         f"backoff_active=True result=False"
                     )
                     return False
-                degraded = snapshot.approval_rate < self._min_approval_rate
+                # When permissive (after max_cycles), require a stronger
+                # degradation margin to retrigger to avoid oscillation.
+                threshold = self._min_approval_rate - self._degraded_margin
+                degraded = snapshot.approval_rate < threshold
                 logging.info(
                     f"[engine] trigger check — mode={self._mode} "
                     f"approval={snapshot.approval_rate:.3f} "
-                    f"threshold={self._min_approval_rate:.3f} "
-                    f"degraded={degraded} result={degraded}"
+                    f"threshold={threshold:.3f} "
+                    f"degraded={degraded} breach_present={breach_present} result={degraded and breach_present}"
                 )
-                return degraded
+                return degraded and breach_present
 
-        breach_detected = self._aggregator.pop_breach()
+        breach_detected = False
+        try:
+            breach_detected = self._aggregator.peek_breach()
+        except Exception:
+            breach_detected = False
         result = breach_detected
         logging.info(
             f"[engine] trigger check — mode={self._mode} "
