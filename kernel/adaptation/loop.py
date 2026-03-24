@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 MAX_CYCLES     = 3
 MAX_CORRECTIONS = 1
-OBSERVE_WAIT_S  = 3.0   # seconds to wait before observing outcome
+OBSERVE_WAIT_S  = 4.0   # seconds to wait before observing outcome
 
 
 class AdaptationLoop:
@@ -132,6 +132,19 @@ class AdaptationLoop:
             f"approval_rate={snapshot.approval_rate:.3f} "
             f"any_breach={snapshot.invariant_risk.any_breach}"
         )
+        # Diagnostic: include per-provider rates and explicit invariant list
+        try:
+            per_provider = {pm.provider: {
+                'rolling_success_rate': pm.rolling_success_rate,
+                'p95_latency_ms': pm.p95_latency_ms,
+                'timeout_rate': pm.timeout_rate,
+                'sla_breach_rate': pm.sla_breach_rate,
+            } for pm in snapshot.per_provider}
+            logger.info(f"[adaptation] per_provider={per_provider}")
+            breaches = self._get_breaches(snapshot)
+            logger.info(f"[adaptation] active_breaches={breaches}")
+        except Exception:
+            logger.debug("[adaptation] failed to emit per-provider fetch diagnostics")
         return state
 
     # ------------------------------------------------------------------
@@ -336,11 +349,17 @@ class AdaptationLoop:
 
         try:
             new_theta = PolicyVector(**state.proposed_theta.model_dump())
+            # Log prior and new policy for diagnostics
+            try:
+                prior = self._policy_store.current.__dict__
+            except Exception:
+                prior = None
             self._policy_store.update(new_theta)
             logger.info(
                 f"[adaptation] policy deployed — "
                 f"max_retry={new_theta.max_retry} "
-                f"weights={new_theta.provider_weights}"
+                f"weights={new_theta.provider_weights} "
+                f"prior={prior}"
             )
         except Exception as e:
             logger.error(f"[adaptation] policy deploy failed — {e}")
@@ -362,6 +381,19 @@ class AdaptationLoop:
         if snapshot is None:
             logger.warning("[adaptation] no snapshot for observation")
             return state
+
+        # Diagnostic: log the observed snapshot metrics at observation time
+        try:
+            logger.info(
+                f"[adaptation] observe_snapshot — approval={snapshot.approval_rate:.3f} "
+                f"sla_breach_rate={snapshot.sla_breach_rate:.3f} "
+                f"timeout_rate={snapshot.timeout_rate:.3f} "
+                f"p95_latency_ms={snapshot.p95_latency_ms} "
+                f"retry_amplification={snapshot.retry_amplification_factor:.3f} "
+                f"invariants={self._get_breaches(snapshot)}"
+            )
+        except Exception:
+            logger.debug("[adaptation] failed to emit observe snapshot diagnostics")
 
         if not snapshot.invariant_risk.any_breach:
             state.status = "success"

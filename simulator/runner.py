@@ -16,10 +16,12 @@ from transaction_simulator import TransactionSimulator, SimulatorConfig
 from kernel.aggregator.aggregator import Aggregator, HealthThresholds
 import pathlib
 import time
+import json
 
 ROOT = pathlib.Path(__file__).parent.parent  # apa-kernel/
 STREAMS  = ROOT / "data" / "streams"
 POLICIES = ROOT / "data" / "policies"
+GATEWAY_CMD_PATH = ROOT / "data" / "gateway_commands.json"
 
 aggregator_path = str(STREAMS / "events.jsonl")
 backend_path    = str(STREAMS / "events.jsonl")
@@ -78,7 +80,7 @@ async def main(debug_eval_ms: int | None = None):
 
     # --- Simulator ---
     config = SimulatorConfig(
-        max_transactions  = 800,
+        max_transactions  = 1200,
         speed_multiplier  = 1,    # 10x faster than real time
         clock_start_ms    = 0,
         real_tick_delay_s = 0.05
@@ -107,9 +109,71 @@ async def main(debug_eval_ms: int | None = None):
             await asyncio.sleep(0.1)
 
     async def inject_disturbance():
-        await asyncio.sleep(10)   # let healthy baseline establish
+        await asyncio.sleep(3)   # let healthy baseline establish
         gateway_model.force_regime("G1", Regime.OUTAGE)
         print("[disturbance] G1 forced to OUTAGE")
+
+    async def gateway_watcher():
+        """Watch data/gateway_commands.json for external commands and apply them.
+
+        This polls periodically and applies any commands found by calling
+        `gateway_model.force_regime(provider, Regime.X)`. After applying,
+        clears the commands list and writes the file back.
+        """
+        while True:
+            try:
+                if GATEWAY_CMD_PATH.exists():
+                    raw = GATEWAY_CMD_PATH.read_text(encoding="utf-8")
+                    try:
+                        payload = json.loads(raw) if raw.strip() else {}
+                    except Exception:
+                        payload = {}
+
+                    cmds = payload.get("commands", []) or []
+                    regimes = payload.get("regimes", {}) or {}
+
+                    # Apply explicit commands first
+                    applied = False
+                    for c in cmds:
+                        p = str(c.get("provider", "")).upper()
+                        action = str(c.get("action", "")).upper()
+                        if p in {"G1", "G2"} and action:
+                            if action == "OUTAGE":
+                                gateway_model.force_regime(p, Regime.OUTAGE)
+                                print(f"[gateway_watcher] applied {p} -> OUTAGE")
+                                applied = True
+                            elif action == "HEALTHY":
+                                gateway_model.force_regime(p, Regime.HEALTHY)
+                                print(f"[gateway_watcher] applied {p} -> HEALTHY")
+                                applied = True
+                            elif action == "DEGRADED":
+                                gateway_model.force_regime(p, Regime.DEGRADED)
+                                print(f"[gateway_watcher] applied {p} -> DEGRADED")
+                                applied = True
+
+                    # Apply regime map as authoritative states
+                    for p, r in regimes.items():
+                        pp = str(p).upper()
+                        if pp in {"G1", "G2"}:
+                            try:
+                                rg = Regime(r)
+                            except Exception:
+                                rg = None
+                            if rg is not None:
+                                gateway_model.force_regime(pp, rg)
+                                # don't spam prints when nothing changed
+                                applied = True
+
+                    if applied:
+                        # clear commands and update timestamp atomically
+                        payload["commands"] = []
+                        payload["updated_at"] = int(time.time() * 1000)
+                        tmp = GATEWAY_CMD_PATH.with_suffix(".tmp")
+                        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                        tmp.replace(GATEWAY_CMD_PATH)
+            except Exception as e:
+                print(f"[gateway_watcher] error: {e}")
+            await asyncio.sleep(0.75)
 
     async def run_simulation() -> None:
         start = time.time()
@@ -123,6 +187,7 @@ async def main(debug_eval_ms: int | None = None):
             run_simulation(),
             aggregator.run_heartbeat(),
             inject_disturbance(),
+            gateway_watcher(),
             # print_tail()
         )
     except asyncio.CancelledError:

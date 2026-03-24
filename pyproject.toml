@@ -6,12 +6,15 @@ readme = "README.md"
 requires-python = ">=3.10"
 
 dependencies = [
+    "fastapi>=0.135.1",
     "langchain>=1.2.12",
     "langchain-google-genai>=4.2.1",
     "langchain-openai>=1.1.11",
     "pydantic",
     "pytest>=9.0.2",
     "python-dotenv>=1.2.2",
+    "sse-starlette>=3.3.3",
+    "uvicorn>=0.41.0",
 ]
 
 [project.optional-dependencies]

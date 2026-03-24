@@ -78,6 +78,7 @@ class Aggregator:
     def _tick(self) -> None:
         snapshot = self._reader.compute(self._window_size_ms, self._max_retry)
         
+        # Basic tick summary
         logging.info(
             f"[aggregator] tick — "
             f"txn_count={snapshot.window_txn_count} "
@@ -85,6 +86,23 @@ class Aggregator:
             f"any_breach={snapshot.invariant_risk.any_breach} "
             f"healthy_baseline={'set' if self._last_healthy else 'none'}"
         )
+
+        # Extra diagnostic: per-provider summary and invariant flags
+        try:
+            per_provider = {pm.provider: {
+                'rolling_success_rate': pm.rolling_success_rate,
+                'p95_latency_ms': pm.p95_latency_ms,
+                'timeout_rate': pm.timeout_rate,
+                'sla_breach_rate': pm.sla_breach_rate,
+                'circuit_open_rate': pm.circuit_open_rate,
+            } for pm in snapshot.per_provider}
+            inv = snapshot.invariant_risk
+            logging.info(
+                f"[aggregator] per_provider={per_provider} "
+                f"invariants={{'I2_retry_bound':{inv.I2_retry_bound}, 'I6_circuit_respect':{inv.I6_circuit_respect}, 'I7_sla_breach':{inv.I7_sla_breach}, 'any_breach':{inv.any_breach}}}"
+            )
+        except Exception:
+            logging.debug("[aggregator] failed to emit per-provider diagnostics")
         
         if not snapshot.has_sufficient_data:
             return
