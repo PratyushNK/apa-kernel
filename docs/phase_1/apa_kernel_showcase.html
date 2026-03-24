@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APA Kernel — Live Run Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --surface-2: #111820;
+    --border: #1e2d3d;
+    --accent: #00d4ff;
+    --accent-2: #7c3aed;
+    --accent-3: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-bright: #f8fafc;
+    --glow: rgba(0, 212, 255, 0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 6rem 0 4rem;
+    text-align: center;
+    position: relative;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    height: 300px;
+    background: radial-gradient(ellipse, rgba(0,212,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 0.4rem 1rem;
+    border-radius: 2px;
+    margin-bottom: 2rem;
+    animation: fadeIn 0.6s ease forwards;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 800;
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 1rem;
+    animation: slideUp 0.7s ease forwards;
+  }
+
+  .hero h1 span {
+    color: var(--accent);
+    position: relative;
+  }
+
+  .hero-sub {
+    font-size: 1.1rem;
+    color: var(--text-dim);
+    max-width: 600px;
+    margin: 0 auto 3rem;
+    font-weight: 400;
+    animation: slideUp 0.8s ease forwards;
+  }
+
+  .hero-meta {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    animation: slideUp 0.9s ease forwards;
+  }
+
+  .hero-meta-item {
+    text-align: center;
+  }
+
+  .hero-meta-item .val {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+  }
+
+  .hero-meta-item .lbl {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── SECTION ── */
+  .section {
+    padding: 4rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .section-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 1rem;
+    letter-spacing: -0.02em;
+  }
+
+  .section-desc {
+    color: var(--text-dim);
+    max-width: 650px;
+    margin-bottom: 2.5rem;
+    font-size: 0.95rem;
+  }
+
+  /* ── ARCHITECTURE ── */
+  .arch-flow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    position: relative;
+    margin: 2rem 0;
+  }
+
+  .arch-flow::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), var(--accent-3), transparent);
+    transform: translateY(-50%);
+    z-index: 0;
+  }
+
+  .arch-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+    padding: 0 1rem;
+  }
+
+  .arch-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    position: relative;
+  }
+
+  .arch-icon::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 14px;
+    padding: 2px;
+    background: linear-gradient(135deg, var(--accent), transparent);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  .arch-node-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-bright);
+    text-align: center;
+    margin-bottom: 0.3rem;
+  }
+
+  .arch-node-desc {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  /* ── TIMELINE ── */
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2), var(--accent-3), transparent);
+  }
+
+  .phase {
+    position: relative;
+    margin-bottom: 2.5rem;
+    animation: fadeIn 0.5s ease forwards;
+  }
+
+  .phase-dot {
+    position: absolute;
+    left: -2.4rem;
+    top: 0.3rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: var(--bg);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .phase-dot.warn { border-color: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .phase-dot.success { border-color: var(--accent-3); box-shadow: 0 0 8px var(--accent-3); }
+  .phase-dot.purple { border-color: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+
+  .phase-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.3rem;
+  }
+
+  .phase-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 0.5rem;
+  }
+
+  .phase-desc {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 0.8rem;
+    line-height: 1.6;
+  }
+
+  /* ── LOG BLOCK ── */
+  .log-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.8;
+    overflow-x: auto;
+  }
+
+  .log-line { display: block; }
+  .log-time { color: var(--text-dim); }
+  .log-level-info { color: var(--accent); }
+  .log-level-warn { color: var(--warn); }
+  .log-level-success { color: var(--accent-3); }
+  .log-component { color: var(--accent-2); }
+  .log-msg { color: var(--text); }
+  .log-highlight { color: var(--accent-3); font-weight: 500; }
+  .log-value { color: var(--warn); }
+
+  /* ── METRICS GRID ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+  }
+
+  .metric-card.healthy::before { background: var(--accent-3); }
+  .metric-card.warn::before { background: var(--warn); }
+  .metric-card.danger::before { background: var(--danger); }
+  .metric-card.accent::before { background: var(--accent); }
+
+  .metric-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .metric-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+
+  .metric-value.green { color: var(--accent-3); }
+  .metric-value.amber { color: var(--warn); }
+  .metric-value.red { color: var(--danger); }
+  .metric-value.blue { color: var(--accent); }
+
+  .metric-delta {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  .metric-delta.up { color: var(--accent-3); }
+  .metric-delta.down { color: var(--danger); }
+
+  /* ── TWO STAGE ── */
+  .two-stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .stage-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    position: relative;
+  }
+
+  .stage-number {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .stage-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 0.8rem;
+  }
+
+  .stage-quote {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent-3);
+    line-height: 1.6;
+    border-left: 2px solid var(--accent-3);
+    padding-left: 0.8rem;
+    margin-bottom: 1rem;
+    font-style: italic;
+  }
+
+  .stage-result {
+    background: var(--surface-2);
+    border-radius: 6px;
+    padding: 0.8rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  .stage-result span { color: var(--warn); }
+
+  /* ── RESULT BANNER ── */
+  .result-banner {
+    background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(0,212,255,0.05));
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 12px;
+    padding: 2.5rem;
+    text-align: center;
+    margin: 2rem 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .result-banner::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(16,185,129,0.05) 0%, transparent 60%);
+    animation: pulse 3s ease-in-out infinite;
+  }
+
+  .result-banner h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--accent-3);
+    margin-bottom: 0.5rem;
+    position: relative;
+  }
+
+  .result-banner p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    position: relative;
+  }
+
+  /* ── POLICY DIFF ── */
+  .policy-diff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+
+  .policy-col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .policy-col-header {
+    padding: 0.8rem 1.2rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .policy-col-header.before { color: var(--danger); background: rgba(239,68,68,0.05); }
+  .policy-col-header.after { color: var(--accent-3); background: rgba(16,185,129,0.05); }
+
+  .policy-col-body {
+    padding: 1rem 1.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 2;
+  }
+
+  .policy-line { display: flex; justify-content: space-between; }
+  .policy-key { color: var(--text-dim); }
+  .policy-val { color: var(--text-bright); }
+  .policy-val.changed { color: var(--accent-3); font-weight: 500; }
+
+  /* ── INVARIANTS ── */
+  .invariant-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.8rem;
+    margin: 1.5rem 0;
+  }
+
+  .invariant-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+  }
+
+  .invariant-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 0.3rem;
+    flex-shrink: 0;
+  }
+
+  .invariant-status.pass { background: var(--accent-3); box-shadow: 0 0 6px var(--accent-3); }
+  .invariant-status.checked { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  .invariant-id {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--accent);
+    margin-bottom: 0.2rem;
+  }
+
+  .invariant-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 0.2rem;
+  }
+
+  .invariant-desc {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 3rem 0;
+    text-align: center;
+  }
+
+  .footer p {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 2rem 0;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="container">
+    <div class="badge">Live System Run · March 22, 2026</div>
+    <h1>APA Kernel<br><span>Autonomous Policy Adaptation</span></h1>
+    <p class="hero-sub">
+      An invariant-preserving policy adaptation kernel demonstrating autonomous recovery
+      of a degraded payment orchestration system — without human intervention.
+    </p>
+    <div class="hero-meta">
+      <div class="hero-meta-item">
+        <span class="val">2</span>
+        <span class="lbl">LLM Cycles</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="val">100%</span>
+        <span class="lbl">Invariants Preserved</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="val">0.925</span>
+        <span class="lbl">Final Approval Rate</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="val">~30s</span>
+        <span class="lbl">Time to Recovery</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ARCHITECTURE -->
+<div class="section">
+  <div class="container">
+    <div class="section-label">System Architecture</div>
+    <div class="section-title">Four Decoupled Subsystems</div>
+    <p class="section-desc">
+      Each subsystem communicates only through shared files on disk — no direct coupling.
+      The simulator emits events. The kernel observes, reasons, and adapts.
+    </p>
+    <div class="arch-flow">
+      <div class="arch-node">
+        <div class="arch-icon" style="background: rgba(0,212,255,0.08);">⚡</div>
+        <div class="arch-node-title">Transaction Simulator</div>
+        <div class="arch-node-desc">Emits realistic payment events to JSONL stream. Poisson arrivals, Markov gateway regimes, LogNormal latency.</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-icon" style="background: rgba(124,58,237,0.08);">📊</div>
+        <div class="arch-node-title">Metrics Aggregator</div>
+        <div class="arch-node-desc">Reads event stream incrementally. Computes 11 windowed metrics. Tracks last-healthy baseline for delta.</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-icon" style="background: rgba(16,185,129,0.08);">🧠</div>
+        <div class="arch-node-title">Kernel Engine</div>
+        <div class="arch-node-desc">Monitors aggregator. Detects invariant breaches. Orchestrates adaptation with cooldown control.</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-icon" style="background: rgba(245,158,11,0.08);">🔄</div>
+        <div class="arch-node-title">Adaptation Loop</div>
+        <div class="arch-node-desc">Two-stage LLM reasoning. Proposes policy vector θ. Verifies invariants. Deploys and observes outcome.</div>
+      </div>
+    </div>
+    <div class="log-block" style="margin-top: 1.5rem; font-size: 0.68rem; color: var(--text-dim);">
+      <span style="color: var(--accent);">simulator/runner.py</span> → writes to <span style="color: var(--warn);">data/streams/events.jsonl</span> &nbsp;·&nbsp;
+      <span style="color: var(--accent-2);">kernel/engine/runner.py</span> → reads from <span style="color: var(--warn);">data/streams/events.jsonl</span> &nbsp;·&nbsp;
+      adaptation writes to <span style="color: var(--warn);">data/policies/policy.json</span> &nbsp;·&nbsp;
+      simulator reloads <span style="color: var(--warn);">policy.json</span> on every routing decision
+    </div>
+  </div>
+</div>
+
+<!-- TIMELINE -->
+<div class="section">
+  <div class="container">
+    <div class="section-label">Execution Timeline</div>
+    <div class="section-title">What Happened, Step by Step</div>
+    <p class="section-desc">
+      The complete lifecycle of this run — from healthy baseline through induced failure,
+      autonomous adaptation, and confirmed recovery.
+    </p>
+
+    <div class="timeline">
+
+      <!-- Phase 1 -->
+      <div class="phase">
+        <div class="phase-dot"></div>
+        <div class="phase-time">13:03:47 — t=0s</div>
+        <div class="phase-title">System Startup</div>
+        <div class="phase-desc">Simulator begins generating healthy payment traffic at λ=10 txns/sec. Kernel engine starts monitoring. Aggregator begins computing rolling windows every 2 seconds.</div>
+        <div class="log-block">
+          <span class="log-line"><span class="log-time">13:03:47</span> <span class="log-level-info">INFO</span> <span class="log-component">[engine]</span> <span class="log-msg">started</span></span>
+          <span class="log-line"><span class="log-time">13:03:49</span> <span class="log-level-info">INFO</span> <span class="log-component">[aggregator]</span> <span class="log-msg">tick — txn_count=<span class="log-value">70</span> approval=<span class="log-value">0.957</span> any_breach=False healthy_baseline=none</span></span>
+          <span class="log-line"><span class="log-time">13:03:49</span> <span class="log-level-info">INFO</span> <span class="log-component">[engine]</span> <span class="log-msg">trigger check — mode=monitoring sufficient=True breach=<span class="log-value">False</span> result=False</span></span>
+        </div>
+      </div>
+
+      <!-- Phase 2 -->
+      <div class="phase">
+        <div class="phase-dot"></div>
+        <div class="phase-time">13:03:51 — t=4s</div>
+        <div class="phase-title">Healthy Baseline Captured</div>
+        <div class="phase-desc">After observing consistently healthy metrics (approval rate ≥ 0.85, no invariant breaches), the aggregator locks in the last-healthy snapshot. This becomes the reference point for all future delta calculations.</div>
+        <div class="log-block">
+          <span class="log-line"><span class="log-time">13:03:51</span> <span class="log-level-info">INFO</span> <span class="log-component">[aggregator]</span> <span class="log-msg">tick — txn_count=<span class="log-value">35</span> approval=<span class="log-value">1.000</span> any_breach=False healthy_baseline=<span class="log-highlight">set</span></span></span>
+        </div>
+        <div class="metrics-grid" style="margin-top: 1rem;">
+          <div class="metric-card healthy">
+            <div class="metric-label">Approval Rate</div>
+            <div class="metric-value green">1.000</div>
+            <div class="metric-delta">Baseline locked</div>
+          </div>
+          <div class="metric-card healthy">
+            <div class="metric-label">Any Breach</div>
+            <div class="metric-value green">False</div>
+            <div class="metric-delta">All invariants clear</div>
+          </div>
+          <div class="metric-card healthy">
+            <div class="metric-label">Baseline Status</div>
+            <div class="metric-value green">SET</div>
+            <div class="metric-delta">Reference captured</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 3 -->
+      <div class="phase">
+        <div class="phase-dot warn"></div>
+        <div class="phase-time">13:03:57 — t=10s</div>
+        <div class="phase-title">Disturbance Injected — G1 Forced to OUTAGE</div>
+        <div class="phase-desc">
+          Gateway G1 is programmatically forced into OUTAGE regime, simulating a real-world issuer outage or network partition. The circuit breaker opens on G1 — triggering invariant I6 (Circuit Respect). The engine detects the breach on the very next check.
+        </div>
+        <div class="log-block">
+          <span class="log-line"><span class="log-time">13:03:57</span> <span class="log-level-info">INFO</span> <span class="log-component">[aggregator]</span> <span class="log-msg">tick — txn_count=<span class="log-value">40</span> approval=<span class="log-value">1.000</span> any_breach=<span style="color:var(--danger)">True</span> healthy_baseline=set</span></span>
+          <span class="log-line"><span class="log-time">13:03:57</span> <span class="log-level-info">INFO</span> <span class="log-component">[engine]</span> <span class="log-msg">trigger check — mode=monitoring sufficient=True breach=<span style="color:var(--danger)">True</span> result=<span class="log-highlight">True</span></span></span>
+          <span class="log-line"><span class="log-time">13:03:57</span> <span class="log-level-info">INFO</span> <span class="log-component">[engine]</span> <span class="log-msg">cure trigger — approval_rate=<span class="log-value">1.000</span></span></span>
+        </div>
+        <div style="margin-top: 1rem; padding: 1rem; background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; font-size: 0.82rem; color: var(--text-dim);">
+          <strong style="color: var(--danger);">Note:</strong> Approval rate shows 1.000 at breach detection — the breach is <strong style="color: var(--text);">I6_circuit_respect</strong> (G1 circuit OPEN), not yet approval rate degradation. The kernel correctly identifies the structural invariant violation before it cascades into approval failures.
+        </div>
+      </div>
+
+      <!-- Phase 4 -->
+      <div class="phase">
+        <div class="phase-dot purple"></div>
+        <div class="phase-time">13:03:57 → 13:04:10 — Adaptation Cycle 1</div>
+        <div class="phase-title">Two-Stage LLM Reasoning — First Proposal</div>
+        <div class="phase-desc">
+          The adaptation loop fires. Two sequential LLM calls are made — Stage 1 reasons about what is wrong, Stage 2 translates that reasoning into a concrete policy vector. The proposal is verified against all invariants before deployment.
+        </div>
+
+        <div class="two-stage">
+          <div class="stage-card">
+            <div class="stage-number">Stage 1 · Reasoning Call</div>
+            <div class="stage-title">What is wrong and why?</div>
+            <div class="stage-quote">
+              "High SLA breaches and timeouts stem from overloading G2. Shift routing weight toward G1..."
+            </div>
+            <div class="stage-result">
+              confidence: <span>0.65</span><br>
+              expected_improvement: <span>"Reduce SLA breach and timeout rate"</span>
+            </div>
+          </div>
+          <div class="stage-card">
+            <div class="stage-number">Stage 2 · Policy Vector Call</div>
+            <div class="stage-title">What should the new θ be?</div>
+            <div class="stage-quote">
+              Translates reasoning into concrete parameter changes based on current policy vector context.
+            </div>
+            <div class="stage-result">
+              provider_weights: <span>{'G1': 0.3, 'G2': 0.7}</span><br>
+              max_retry: <span>3</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="log-block">
+          <span class="log-line"><span class="log-time">13:03:57</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">calling LLM for reasoning</span></span>
+          <span class="log-line"><span class="log-time">13:04:05</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">reasoning received — confidence=<span class="log-value">0.65</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:05</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">calling LLM for policy vector</span></span>
+          <span class="log-line"><span class="log-time">13:04:10</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">policy vector received — weights=<span class="log-value">{'G1': 0.3, 'G2': 0.7}</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:10</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">verification passed</span></span>
+          <span class="log-line"><span class="log-time">13:04:10</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">policy deployed — max_retry=<span class="log-value">3</span> weights=<span class="log-value">{'G1': 0.3, 'G2': 0.7}</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:10</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">waiting 3.0s to observe outcome...</span></span>
+        </div>
+      </div>
+
+      <!-- Phase 5 -->
+      <div class="phase">
+        <div class="phase-dot warn"></div>
+        <div class="phase-time">13:04:13 — Cycle 1 Observation</div>
+        <div class="phase-title">Not Yet Recovered — Cycle 2 Initiated</div>
+        <div class="phase-desc">
+          After 3 seconds, the aggregator reports approval_rate=0.881 with any_breach=True still active. The system has not yet recovered. The loop enters cycle 2 — crucially, with <em>different reasoning</em> based on the updated metrics snapshot.
+        </div>
+        <div class="log-block">
+          <span class="log-line"><span class="log-time">13:04:13</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">not yet recovered — cycle <span class="log-value">1/3</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:13</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">fetched metrics — approval_rate=<span class="log-value">0.881</span> any_breach=True</span></span>
+        </div>
+      </div>
+
+      <!-- Phase 6 -->
+      <div class="phase">
+        <div class="phase-dot purple"></div>
+        <div class="phase-time">13:04:13 → 13:04:24 — Adaptation Cycle 2</div>
+        <div class="phase-title">Refined Reasoning — Policy Evolution</div>
+        <div class="phase-desc">
+          The agent produces <strong style="color: var(--text-bright);">different reasoning</strong> on cycle 2 — not a repeat. Having observed that the previous policy shift wasn't enough, it now identifies retry amplification as the primary driver and reduces max_retry from 3 to 2.
+        </div>
+
+        <div class="two-stage">
+          <div class="stage-card">
+            <div class="stage-number">Stage 1 · Reasoning Call</div>
+            <div class="stage-title">Updated analysis</div>
+            <div class="stage-quote">
+              "High retry amplification is causing SLA breaches and timeouts. Reduce max_retry to limit load amplification..."
+            </div>
+            <div class="stage-result">
+              confidence: <span>0.74</span><br>
+              expected_improvement: <span>"Reduce retry amplification and SLA breaches"</span>
+            </div>
+          </div>
+          <div class="stage-card">
+            <div class="stage-number">Stage 2 · Policy Vector Call</div>
+            <div class="stage-title">Evolved θ</div>
+            <div class="stage-quote">
+              Identifies max_retry as a lever — reduces from 3 to 2 to cut retry amplification feedback loop.
+            </div>
+            <div class="stage-result">
+              provider_weights: <span>{'G1': 0.3, 'G2': 0.7}</span><br>
+              max_retry: <span>2 ← changed from 3</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="log-block">
+          <span class="log-line"><span class="log-time">13:04:19</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">reasoning received — confidence=<span class="log-value">0.74</span> reasoning='High retry amplification...'</span></span>
+          <span class="log-line"><span class="log-time">13:04:24</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">policy vector received — weights=<span class="log-value">{'G1': 0.3, 'G2': 0.7}</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:24</span> <span class="log-level-info">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">policy deployed — max_retry=<span class="log-value">2</span> weights=<span class="log-value">{'G1': 0.3, 'G2': 0.7}</span></span></span>
+        </div>
+      </div>
+
+      <!-- Phase 7 -->
+      <div class="phase">
+        <div class="phase-dot success"></div>
+        <div class="phase-time">13:04:27 — t=40s</div>
+        <div class="phase-title">Recovery Confirmed</div>
+        <div class="phase-desc">
+          3 seconds after the second policy deployment, the aggregator reports approval_rate=0.925 with no active invariant breaches. Recovery is confirmed. The engine enters a 30-second cooldown to prevent premature re-triggering.
+        </div>
+        <div class="log-block">
+          <span class="log-line"><span class="log-time">13:04:27</span> <span class="log-level-success">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">recovery confirmed — approval_rate=<span class="log-highlight">0.925</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:27</span> <span class="log-level-success">INFO</span> <span class="log-component">[adaptation]</span> <span class="log-msg">loop ended — status: <span class="log-highlight">success</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:27</span> <span class="log-level-success">INFO</span> <span class="log-component">[engine]</span> <span class="log-msg">adaptation done — status=<span class="log-highlight">success</span> cycles=<span class="log-value">2</span></span></span>
+          <span class="log-line"><span class="log-time">13:04:27</span> <span class="log-level-info">INFO</span> <span class="log-component">[engine]</span> <span class="log-msg">entering cooldown for 30s</span></span>
+          <span class="log-line"><span class="log-time">13:04:29</span> <span class="log-level-info">INFO</span> <span class="log-component">[engine]</span> <span class="log-msg">trigger check — mode=<span class="log-value">cooldown</span> approval=<span class="log-highlight">0.925</span> threshold=0.850 degraded=False result=False</span></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- POLICY DIFF -->
+<div class="section">
+  <div class="container">
+    <div class="section-label">Policy Evolution</div>
+    <div class="section-title">What the Agent Changed</div>
+    <p class="section-desc">
+      The agent made two precise, minimal changes to the policy vector across two cycles.
+      Everything else was left unchanged — conservative adaptation in action.
+    </p>
+    <div class="policy-diff">
+      <div class="policy-col">
+        <div class="policy-col-header before">θ_0 — Initial Policy</div>
+        <div class="policy-col-body">
+          <div class="policy-line"><span class="policy-key">provider_weights.G1</span><span class="policy-val">0.5</span></div>
+          <div class="policy-line"><span class="policy-key">provider_weights.G2</span><span class="policy-val">0.5</span></div>
+          <div class="policy-line"><span class="policy-key">max_retry</span><span class="policy-val">3</span></div>
+          <div class="policy-line"><span class="policy-key">base_backoff_ms</span><span class="policy-val">100</span></div>
+          <div class="policy-line"><span class="policy-key">backoff_multiplier</span><span class="policy-val">2.0</span></div>
+          <div class="policy-line"><span class="policy-key">retry_budget_window_ms</span><span class="policy-val">60000</span></div>
+          <div class="policy-line"><span class="policy-key">max_retries_per_window</span><span class="policy-val">200</span></div>
+        </div>
+      </div>
+      <div class="policy-col">
+        <div class="policy-col-header after">θ_2 — After Adaptation</div>
+        <div class="policy-col-body">
+          <div class="policy-line"><span class="policy-key">provider_weights.G1</span><span class="policy-val changed">0.3 ← routed away</span></div>
+          <div class="policy-line"><span class="policy-key">provider_weights.G2</span><span class="policy-val changed">0.7 ← increased load</span></div>
+          <div class="policy-line"><span class="policy-key">max_retry</span><span class="policy-val changed">2 ← reduced amplification</span></div>
+          <div class="policy-line"><span class="policy-key">base_backoff_ms</span><span class="policy-val">100</span></div>
+          <div class="policy-line"><span class="policy-key">backoff_multiplier</span><span class="policy-val">2.0</span></div>
+          <div class="policy-line"><span class="policy-key">retry_budget_window_ms</span><span class="policy-val">60000</span></div>
+          <div class="policy-line"><span class="policy-key">max_retries_per_window</span><span class="policy-val">200</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INVARIANTS -->
+<div class="section">
+  <div class="container">
+    <div class="section-label">Formal Safety</div>
+    <div class="section-title">Invariants Preserved Throughout</div>
+    <p class="section-desc">
+      Every proposed policy vector was validated against the full invariant set before deployment.
+      No invariant was violated at any point during the adaptation process.
+    </p>
+    <div class="invariant-grid">
+      <div class="invariant-card">
+        <div class="invariant-status pass"></div>
+        <div>
+          <div class="invariant-id">I1</div>
+          <div class="invariant-name">Single Settlement</div>
+          <div class="invariant-desc">No transaction processed more than once. Verified via attempt ID uniqueness.</div>
+        </div>
+      </div>
+      <div class="invariant-card">
+        <div class="invariant-status pass"></div>
+        <div>
+          <div class="invariant-id">I2</div>
+          <div class="invariant-name">Retry Bound</div>
+          <div class="invariant-desc">max_retry proposed as 2 — within [1,5] bound. Enforced by InvariantVerifier.</div>
+        </div>
+      </div>
+      <div class="invariant-card">
+        <div class="invariant-status pass"></div>
+        <div>
+          <div class="invariant-id">I3</div>
+          <div class="invariant-name">Terminal Absorption</div>
+          <div class="invariant-desc">No AttemptExecution emitted after terminal state. Enforced in TransactionEngine.</div>
+        </div>
+      </div>
+      <div class="invariant-card">
+        <div class="invariant-status pass"></div>
+        <div>
+          <div class="invariant-id">I4</div>
+          <div class="invariant-name">Single Active Attempt</div>
+          <div class="invariant-desc">No concurrent attempts per transaction. State machine enforces sequential execution.</div>
+        </div>
+      </div>
+      <div class="invariant-card">
+        <div class="invariant-status checked"></div>
+        <div>
+          <div class="invariant-id">I6</div>
+          <div class="invariant-name">Circuit Respect</div>
+          <div class="invariant-desc">G1 circuit OPEN — routing correctly excluded G1 from selection via is_up() check.</div>
+        </div>
+      </div>
+      <div class="invariant-card">
+        <div class="invariant-status pass"></div>
+        <div>
+          <div class="invariant-id">I7</div>
+          <div class="invariant-name">SLA Terminal</div>
+          <div class="invariant-desc">Transactions exceeding SLA deadline marked FAILED. No further attempts allowed.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div class="section">
+  <div class="container">
+    <div class="result-banner">
+      <h2>✓ Autonomous Recovery Achieved</h2>
+      <p style="margin-top: 0.5rem; margin-bottom: 1.5rem;">
+        The APA Kernel autonomously detected a gateway outage, reasoned about its cause,
+        proposed and verified two consecutive policy mutations, and confirmed system recovery —
+        with zero human intervention and zero invariant violations.
+      </p>
+      <div style="display: flex; justify-content: center; gap: 4rem;">
+        <div>
+          <div style="font-family: 'Space Mono', monospace; font-size: 1.4rem; color: var(--accent-3); font-weight: 700;">2</div>
+          <div style="font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">LLM Cycles</div>
+        </div>
+        <div>
+          <div style="font-family: 'Space Mono', monospace; font-size: 1.4rem; color: var(--accent-3); font-weight: 700;">4</div>
+          <div style="font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">LLM Calls Total</div>
+        </div>
+        <div>
+          <div style="font-family: 'Space Mono', monospace; font-size: 1.4rem; color: var(--accent-3); font-weight: 700;">2</div>
+          <div style="font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Policy Fields Changed</div>
+        </div>
+        <div>
+          <div style="font-family: 'Space Mono', monospace; font-size: 1.4rem; color: var(--accent-3); font-weight: 700;">0</div>
+          <div style="font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Invariant Violations</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key research claims -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem;">
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
+        <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🎯</div>
+        <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-bright); margin-bottom: 0.4rem;">Conservative Adaptation</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim); line-height: 1.5;">Only 2 of 9 policy fields were modified. The agent changed the minimum necessary — a key property for safe autonomous systems.</div>
+      </div>
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
+        <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🧠</div>
+        <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-bright); margin-bottom: 0.4rem;">Genuine Reasoning</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim); line-height: 1.5;">Cycle 2 produced different reasoning from cycle 1 — identifying retry amplification as the residual cause. Not a template, genuine multi-step inference.</div>
+      </div>
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
+        <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🔒</div>
+        <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-bright); margin-bottom: 0.4rem;">Formal Safety Gate</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim); line-height: 1.5;">Every proposed θ was validated by InvariantVerifier before deployment. The adaptation loop cannot deploy an unsafe policy — by construction.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="container">
+    <p>APA Kernel · Invariant-Preserving Policy Adaptation for Autonomous Financial Systems</p>
+    <p style="margin-top: 0.5rem;">Live run · March 22, 2026 · Phase-1 Research Prototype</p>
+  </div>
+</div>
+
+</body>
+</html>

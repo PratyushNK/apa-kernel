@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APA Kernel Live Demo</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <main class="app-shell">
+      <header class="topbar panel">
+        <h1>APA KERNEL · Invariant-Preserving Policy Adaptation</h1>
+        <div class="top-controls">
+          <button id="startBtn" class="btn btn-primary">▶ Start</button>
+          <button id="injectG1Btn" class="btn btn-accent">⚡ Inject G1 Outage</button>
+          <button id="stopBtn" class="btn btn-danger">■ Stop</button>
+          <span id="systemStatus" class="pill status idle">IDLE</span>
+        </div>
+      </header>
+
+      <section class="metrics-grid" id="metricsGrid">
+        <article class="metric-card"><h3>Approval Rate</h3><div id="approval_rate" class="metric-value">—</div><div id="approval_rate_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>Rolling Success</h3><div id="rolling_success_rate" class="metric-value">—</div><div id="rolling_success_rate_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>Retry Amplification</h3><div id="retry_amplification_factor" class="metric-value">—</div><div id="retry_amplification_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>SLA Breach Rate</h3><div id="sla_breach_rate" class="metric-value">—</div><div id="sla_breach_rate_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>Circuit Open Rate</h3><div id="circuit_open_rate" class="metric-value">—</div><div id="circuit_open_rate_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>Timeout Rate</h3><div id="timeout_rate" class="metric-value">—</div><div id="timeout_rate_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>P95 Latency (ms)</h3><div id="p95_latency_ms" class="metric-value">—</div><div id="p95_latency_ms_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>Cost / Success</h3><div id="cost_per_successful_txn" class="metric-value">—</div><div id="cost_per_successful_txn_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>Avg Attempts / Txn</h3><div id="average_attempts_per_txn" class="metric-value">—</div><div id="average_attempts_per_txn_delta" class="metric-delta">—</div></article>
+        <article class="metric-card"><h3>Avg Decision Latency</h3><div id="average_decision_latency" class="metric-value">—</div><div id="average_decision_latency_delta" class="metric-delta">—</div></article>
+      </section>
+
+      <section class="split-row">
+        <article class="panel gateway-panel">
+          <h2>Gateway Status</h2>
+          <div class="gateway-pills">
+            <span id="g1Status" class="pill regime healthy">● G1 HEALTHY</span>
+            <span id="g2Status" class="pill regime healthy">● G2 HEALTHY</span>
+          </div>
+          <div class="gateway-controls">
+            <button id="outageG1Btn" class="btn">↓ Outage G1</button>
+            <button id="outageG2Btn" class="btn">↓ Outage G2</button>
+            <button id="recoverG1Btn" class="btn">↑ Recover G1</button>
+            <button id="recoverG2Btn" class="btn">↑ Recover G2</button>
+          </div>
+        </article>
+
+        <article class="panel chart-panel">
+          <h2>Live Approval Signal</h2>
+          <canvas id="approvalChart" aria-label="Approval rate over time" role="img"></canvas>
+        </article>
+      </section>
+
+      <section class="split-row">
+        <article class="panel policy-panel">
+          <h2>Policy Vector θ</h2>
+          <div class="weight-row"><span>G1 Weight</span><div class="bar"><div id="g1WeightBar" class="bar-fill"></div></div><span id="g1WeightVal">—</span></div>
+          <div class="weight-row"><span>G2 Weight</span><div class="bar"><div id="g2WeightBar" class="bar-fill"></div></div><span id="g2WeightVal">—</span></div>
+          <div class="policy-fields">
+            <div><label>max_retry</label><span id="maxRetry">—</span></div>
+            <div><label>base_backoff_ms</label><span id="baseBackoff">—</span></div>
+            <div><label>max_retries_per_window</label><span id="maxRetriesWindow">—</span></div>
+          </div>
+        </article>
+
+        <article class="panel engine-panel">
+          <h2>Adaptation Engine</h2>
+          <div class="engine-meta">
+            <span id="engineState" class="pill engine monitoring">● MONITORING</span>
+            <div><label>Last trigger</label><div id="lastTrigger" class="mono">-</div></div>
+            <div><label>Last status</label><div id="lastStatus" class="mono">-</div></div>
+            <div><label>Recovery</label><div id="adaptationStatus" class="mono">-</div></div>
+            <div><label>TLC</label><div id="tlcStatus" class="mono">-</div></div>
+            <div><label>Cycles</label><div id="cycles">0</div></div>
+          </div>
+          <div id="adaptationLog" class="log-box"></div>
+        </article>
+      </section>
+
+      <section class="split-row">
+        <article class="panel">
+          <h2>Simulator Log</h2>
+          <div id="simulatorLog" class="log-box mono"></div>
+        </article>
+        <article class="panel">
+          <h2>Kernel Log</h2>
+          <div id="kernelLog" class="log-box mono"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Event Stream</h2>
+        <div id="eventTail" class="log-box mono"></div>
+      </section>
+    </main>
+  </body>
+</html>

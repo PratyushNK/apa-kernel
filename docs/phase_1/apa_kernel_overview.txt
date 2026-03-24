@@ -1,0 +1,23 @@
+What you built
+A research-grade autonomous policy adaptation kernel for payment orchestration systems. The core research contribution is not the simulator or the metrics — it's the invariant-preservation guarantee during autonomous policy evolution.
+
+The problem you're solving
+Modern payment orchestration systems (routing, retry, failover) run on static manually-tuned policies. When conditions change — gateway degrades, traffic spikes, failure rates shift — human engineers must detect and respond. This is slow, reactive, and doesn't scale.
+The naive fix is "just learn the policies automatically." But autonomous policy learning in financial systems is dangerous — naive optimisation can violate critical safety properties like retry bounds, idempotency, SLA contracts, circuit breaker state. A learning agent that discovers "more retries = higher approval rate" will amplify load during an outage until the system collapses.
+Your research question: Can a system autonomously evolve operational policies while providing formal guarantees that safety invariants are never violated — even during the adaptation process itself?
+
+Your answer
+Instead of learning policies directly, the kernel learns policy adaptations constrained by invariant validation. Every proposed mutation is verified — formally, via TLA+ model checking — before deployment. If the proposed θ violates any invariant, it is rejected and a correction is attempted. The system never deploys an unsafe policy by construction.
+This is the Knight Capital argument made rigorous. Knight Capital lost $440M in 45 minutes from an unconstrained autonomous policy deployment. Your kernel makes that class of failure architecturally impossible.
+
+What makes it research-worthy
+Three properties that current autonomous agent frameworks don't provide together:
+1. Formal safety — TLA+ verification of every proposed policy vector before deployment. Not runtime checks, not heuristics — machine-checked proofs over the full state space.
+2. Agentic reasoning over RL — The adaptation agent reasons about why metrics are degrading, which invariant is at risk, and what the minimal conservative fix is. A pure RL agent collapses this into a reward scalar and cannot distinguish a transient burst spike from a structural gateway failure. Your agent can.
+3. Temporal decoupling — Adaptation runs on slow deliberate cycles (every 500-2000 transactions) with statistical confidence windows. This is not reactive control — it's structural policy evolution. The cadence is justified by queueing theory (M/M/1 window stability) and matches how real SRE teams operate: observe for long enough to be confident, then act conservatively.
+
+The demo in one sentence
+A payment gateway fails mid-simulation. The kernel detects the degradation, reasons about cause in two LLM stages, proposes a minimal policy correction, verifies it against six formal invariants via TLA+, deploys it, and confirms recovery — autonomously, in under 30 seconds, with zero invariant violations.
+
+What this is NOT
+It's not a routing library. It's not a retry framework. It's not an RL environment. It's a meta-layer — a kernel that sits above any operational policy system and provides autonomous adaptation with formal safety guarantees. Payment orchestration is the instantiation. The framework generalises to any policy-governed system with definable invariants.

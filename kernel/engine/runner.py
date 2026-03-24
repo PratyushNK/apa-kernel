@@ -115,7 +115,10 @@ class KernelEngine:
                 self._mode = self.MODE_COOLDOWN
                 self._active_cooldown_s = self._cooldown_s
                 self._last_success_at_s = time.monotonic()
-                self._allow_degraded_trigger_in_cooldown = True
+                # After a successful recovery, prevent immediate retriggering
+                # during the cooldown window to avoid flapping on transient
+                # metric noise.
+                self._allow_degraded_trigger_in_cooldown = False
                 logging.info(
                     f"[engine] entering cooldown for {self._active_cooldown_s:.0f}s"
                 )
@@ -213,6 +216,7 @@ async def main() -> None:
         thresholds           = HealthThresholds(),
     )
 
+    # For local validation run with the MockLLM for deterministic, fast behavior
     #llm = GeminiLLM()
     llm = AzureOpenAILLM("o4-mini")
     #llm = MockLLM()

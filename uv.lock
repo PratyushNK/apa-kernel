@@ -48,10 +48,15 @@ name = "apa-kernel"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "langchain" },
     { name = "langchain-google-genai" },
     { name = "langchain-openai" },
     { name = "pydantic" },
+    { name = "pytest" },
+    { name = "python-dotenv" },
+    { name = "sse-starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -77,6 +82,7 @@ verification = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
+    { name = "fastapi", specifier = ">=0.135.1" },
     { name = "fastapi", marker = "extra == 'api'" },
     { name = "langchain", specifier = ">=1.2.12" },
     { name = "langchain-google-genai", specifier = ">=4.2.1" },
@@ -85,9 +91,13 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pandas", marker = "extra == 'simulator'" },
     { name = "pydantic" },
+    { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest", marker = "extra == 'dev'" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "ruff", marker = "extra == 'dev'" },
+    { name = "sse-starlette", specifier = ">=3.3.3" },
     { name = "tqdm", marker = "extra == 'verification'" },
+    { name = "uvicorn", specifier = ">=0.41.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'" },
 ]
 provides-extras = ["api", "simulator", "verification", "dev"]
@@ -2496,6 +2506,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
+]
+
+[[package]]
+name = "sse-starlette"
+version = "3.3.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "starlette" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/14/2f/9223c24f568bb7a0c03d751e609844dce0968f13b39a3f73fbb3a96cd27a/sse_starlette-3.3.3.tar.gz", hash = "sha256:72a95d7575fd5129bd0ae15275ac6432bb35ac542fdebb82889c24bb9f3f4049", size = 32420, upload-time = "2026-03-17T20:05:55.529Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/e2/b8cff57a67dddf9a464d7e943218e031617fb3ddc133aeeb0602ff5f6c85/sse_starlette-3.3.3-py3-none-any.whl", hash = "sha256:c5abb5082a1cc1c6294d89c5290c46b5f67808cfdb612b7ec27e8ba061c22e8d", size = 14329, upload-time = "2026-03-17T20:05:54.35Z" },
 ]
 
 [[package]]

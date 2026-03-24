@@ -35,6 +35,13 @@ THETA_SYSTEM_PROMPT = """You are a payment routing policy parameter setter.
 Given a reasoning analysis of a degraded payment system, return the exact policy vector parameters to implement the proposed fix.
 Return only the policy vector parameters needed to apply the fix."""
 
+# When SLA breaches or timeout_rate are present, prefer decisive mitigation
+# over minor cost optimizations: reduce traffic to failing providers
+# (set that provider weight <= 0.1), increase traffic to healthier providers,
+# set `max_retry` <= 1 and reduce `base_backoff_ms` (e.g. 50ms). Always keep
+# weights summing to 1.0 and respect other constraints.
+
+
 
 def build_adaptation_prompt(ctx: AdaptationContext) -> str:
     delta_section = ""
