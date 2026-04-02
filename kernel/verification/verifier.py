@@ -111,11 +111,11 @@ class InvariantVerifier:
                 logger.exception("TLC attempt raised exception; falling back to Python checks: %s", e)
 
         # Fallback: run existing lightweight numeric invariant checks.
-            violations.extend(self._check_single_settlement(proposed_theta))
-            violations.extend(self._check_I2_retry_bound(proposed_theta))
-            violations.extend(self._check_provider_weights(proposed_theta))
-            violations.extend(self._check_backoff(proposed_theta))
-            violations.extend(self._check_retry_budget(proposed_theta))
+        violations.extend(self._check_single_settlement(proposed_theta))
+        violations.extend(self._check_I2_retry_bound(proposed_theta))
+        violations.extend(self._check_provider_weights(proposed_theta))
+        violations.extend(self._check_backoff(proposed_theta))
+        violations.extend(self._check_retry_budget(proposed_theta))
 
         return len(violations) == 0, violations
 

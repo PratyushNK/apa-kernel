@@ -329,8 +329,9 @@ class AdaptationLoop:
             )
         except Exception:
             logger.debug("[adaptation] failed to emit verification record")
-        else:
-            # Distinguish TLC counterexample vs Python fallback violations
+
+        # Only log failures; avoid emitting misleading warnings when verification passed
+        if not state.verification_pass:
             tlc_indicators = ("TLC counterexample", "TLC attempt error", "TLC check failed")
             if any(any(ind in v for ind in tlc_indicators) for v in violations):
                 logger.warning("[adaptation] verification failed (TLC) — %s", violations)
