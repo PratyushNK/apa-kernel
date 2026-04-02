@@ -194,12 +194,10 @@ Retry allowed only if:
 
 * last_error ∈ {SOFT_DECLINE, TIMEOUT}
 * attempt_count < MAX_RETRY
-* fraud_score < FRAUD_THRESHOLD
 
 Else:
 
 * HARD_DECLINE → FAILED
-* fraud_score high → BLOCKED
 
 ---
 

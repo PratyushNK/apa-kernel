@@ -166,6 +166,39 @@ async def stream() -> EventSourceResponse:
                 engine_state = "adapting"
             else:
                 engine_state = extract_engine_state(list(state.kernel_log))
+            def _compute_semantic_reason(metrics: dict[str, float], engine_state: str) -> str:
+                thresh = parse_health_thresholds()
+                # explicit running / cycle outcomes
+                if state.adaptation_status == "running":
+                    return "Adaptation running — reasoning, policy synthesis or verification in progress"
+                if state.adaptation_status == "success":
+                    return f"Recovered — approval_rate={metrics.get('approval_rate',0):.3f} meets threshold {thresh.get('min_approval_rate'):.2f}"
+                if state.adaptation_status == "max_cycles":
+                    return "Adaptation ended — reached max cycles without recovery"
+                # cooldown explanatory message
+                if engine_state == "cooldown":
+                    return "Cooldown — suppression active after a recent adaptation to avoid oscillation"
+                # detect first semantic violation
+                checks = [
+                    ("approval_rate", "min_approval_rate", lambda v, t: v < t, "Approval rate below threshold"),
+                    ("p95_latency_ms", "max_p95_latency_ms", lambda v, t: v > t, "P95 latency too high"),
+                    ("timeout_rate", "max_timeout_rate", lambda v, t: v > t, "Timeout rate too high"),
+                    ("sla_breach_rate", "max_sla_breach_rate", lambda v, t: v > t, "SLA breach rate too high"),
+                    ("retry_amplification_factor", "max_retry_amplification", lambda v, t: v > t, "Retry amplification too high"),
+                ]
+                for key, thkey, cond, label in checks:
+                    v = metrics.get(key)
+                    t = thresh.get(thkey)
+                    if v is None or t is None:
+                        continue
+                    try:
+                        if cond(v, t):
+                            return f"Degraded — {label}: {v:.3f} vs threshold {t:.3f}"
+                    except Exception:
+                        continue
+                return "Monitoring — metrics within configured health thresholds"
+
+            semantic_reason = _compute_semantic_reason(metrics, engine_state)
 
             payload = {
                 "metrics": metrics,
@@ -185,6 +218,7 @@ async def stream() -> EventSourceResponse:
                 },
                 "engine_state": engine_state,
                 "adaptation_status": state.adaptation_status,
+                "adaptation_status_reason": semantic_reason,
                 "tlc": {
                     "status": state.tlc_status,
                     "violations": state.tlc_violations,

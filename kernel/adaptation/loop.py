@@ -25,6 +25,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import pathlib
+import json
+import time
+import uuid
 
 from interfaces.llm import LLM
 from kernel.adaptation.schemas import (
@@ -49,9 +53,28 @@ from simulator.policy_engine import PolicyStore, PolicyVector
 
 logger = logging.getLogger(__name__)
 
+# Structured adaptations trace path
+ROOT = pathlib.Path(__file__).parent.parent.parent
+ADAPTATIONS_PATH = ROOT / "data" / "streams" / "adaptations.jsonl"
+
+
+def _emit_adaptation_record(stage: str, proposal_id: str | None, payload: dict) -> None:
+    try:
+        ADAPTATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "ts": time.time(),
+            "stage": stage,
+            "proposal_id": proposal_id,
+        }
+        rec.update(payload or {})
+        with ADAPTATIONS_PATH.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec) + "\n")
+    except Exception:
+        logger.debug("[adaptation] failed to emit adaptation record")
+
 MAX_CYCLES     = 3
 MAX_CORRECTIONS = 1
-OBSERVE_WAIT_S  = 4.0   # seconds to wait before observing outcome
+OBSERVE_WAIT_S  = 6.0   # seconds to wait before observing outcome
 
 
 class AdaptationLoop:
@@ -185,10 +208,13 @@ class AdaptationLoop:
         state.verification_pass = False
         state.violations        = []
 
+        # safe slice of optional reasoning (may be None)
+        _reasoning = getattr(decision, "reasoning", None)
+        _reason_snip = (_reasoning[:60] + "...") if isinstance(_reasoning, str) and len(_reasoning) > 60 else (_reasoning if isinstance(_reasoning, str) else None)
         logger.info(
             f"[adaptation] reasoning received — "
             f"confidence={decision.confidence:.2f} "
-            f"reasoning='{decision.reasoning[:60]}...'"
+            f"reasoning='{_reason_snip}'"
         )
         return state
 
@@ -237,6 +263,34 @@ class AdaptationLoop:
             f"[adaptation] policy vector received — "
             f"weights={state.proposed_theta.provider_weights}"
         )
+        # emit structured proposal record
+        try:
+            proposal_id = str(uuid.uuid4())
+            state.proposal_id = proposal_id
+            try:
+                pdump = state.proposed_theta.model_dump(exclude_none=True)
+            except Exception:
+                pdump = None
+            # safe extraction of decision reasoning snippet
+            _dec_reason = getattr(state.decision, "reasoning", None) if state.decision else None
+            _dec_snip = _dec_reason[:200] if isinstance(_dec_reason, str) else None
+            _emit_adaptation_record(
+                "proposed",
+                proposal_id,
+                {
+                    "objective": state.objective,
+                    "decision_confidence": getattr(state.decision, "confidence", None) if state.decision else None,
+                    "decision_reasoning_snip": _dec_snip,
+                    "pre_approval": state.context.approval_rate if state.context else None,
+                    "pre_invariant_breaches": getattr(state.context, "invariant_breaches", None) if state.context else None,
+                    "proposed_theta": {
+                        "provider_weights": (pdump.get("provider_weights") if pdump else None),
+                        "max_retry": (pdump.get("max_retry") if pdump else None),
+                    },
+                },
+            )
+        except Exception:
+            logger.debug("[adaptation] failed to emit proposed JSON record")
         return state
 
     # ------------------------------------------------------------------
@@ -260,6 +314,21 @@ class AdaptationLoop:
 
         if is_valid:
             logger.info("[adaptation] verification passed")
+        # emit verification outcome
+        try:
+            tlc_indicators = ("TLC counterexample", "TLC attempt error", "TLC check failed")
+            verification_tlc = any(any(ind in v for ind in tlc_indicators) for v in violations) if violations else False
+            _emit_adaptation_record(
+                "verified",
+                state.proposal_id,
+                {
+                    "verification_pass": state.verification_pass,
+                    "violations": state.violations,
+                    "verification_tlc": verification_tlc,
+                },
+            )
+        except Exception:
+            logger.debug("[adaptation] failed to emit verification record")
         else:
             # Distinguish TLC counterexample vs Python fallback violations
             tlc_indicators = ("TLC counterexample", "TLC attempt error", "TLC check failed")
@@ -333,6 +402,20 @@ class AdaptationLoop:
 
         if is_valid:
             logger.info("[adaptation] correction passed verification")
+        # emit correction record
+        try:
+            _emit_adaptation_record(
+                "correction",
+                state.proposal_id,
+                {
+                    "correction_count": state.correction_count,
+                    "corrected_theta": state.proposed_theta.model_dump(exclude_none=True),
+                    "verification_pass": state.verification_pass,
+                    "violations": state.violations,
+                },
+            )
+        except Exception:
+            logger.debug("[adaptation] failed to emit correction record")
         else:
             logger.warning(f"[adaptation] correction still invalid — {violations}")
 
@@ -351,7 +434,11 @@ class AdaptationLoop:
             new_theta = PolicyVector(**state.proposed_theta.model_dump())
             # Log prior and new policy for diagnostics
             try:
-                prior = self._policy_store.current.__dict__
+                prior_obj = self._policy_store.current
+                prior = {
+                    "provider_weights": getattr(prior_obj, "provider_weights", None),
+                    "max_retry": getattr(prior_obj, "max_retry", None),
+                }
             except Exception:
                 prior = None
             self._policy_store.update(new_theta)
@@ -361,6 +448,19 @@ class AdaptationLoop:
                 f"weights={new_theta.provider_weights} "
                 f"prior={prior}"
             )
+            # emit deployment record
+            try:
+                new_rec = {"provider_weights": getattr(new_theta, "provider_weights", None), "max_retry": getattr(new_theta, "max_retry", None)}
+                _emit_adaptation_record(
+                    "deployed",
+                    state.proposal_id,
+                    {
+                        "prior": prior,
+                        "new": new_rec,
+                    },
+                )
+            except Exception:
+                logger.debug("[adaptation] failed to emit deployed record")
         except Exception as e:
             logger.error(f"[adaptation] policy deploy failed — {e}")
             state.status = "failed"
@@ -394,6 +494,28 @@ class AdaptationLoop:
             )
         except Exception:
             logger.debug("[adaptation] failed to emit observe snapshot diagnostics")
+
+        # emit observed snapshot record
+        try:
+            post_snapshot = {
+                "approval_rate": getattr(snapshot, "approval_rate", None),
+                "p95_latency_ms": getattr(snapshot, "p95_latency_ms", None),
+                "sla_breach_rate": getattr(snapshot, "sla_breach_rate", None),
+                "timeout_rate": getattr(snapshot, "timeout_rate", None),
+                "invariants": self._get_breaches(snapshot),
+            }
+            recovery_confirmed = not snapshot.invariant_risk.any_breach
+            _emit_adaptation_record(
+                "observed",
+                state.proposal_id,
+                {
+                    "post_snapshot": post_snapshot,
+                    "recovery_confirmed": recovery_confirmed,
+                    "cycle_count": state.cycle_count,
+                },
+            )
+        except Exception:
+            logger.debug("[adaptation] failed to emit observed record")
 
         if not snapshot.invariant_risk.any_breach:
             state.status = "success"
