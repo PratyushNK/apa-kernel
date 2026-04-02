@@ -323,10 +323,14 @@ class TLCConfig:
         cfg_content = "\n".join([
             f"SPECIFICATION {spec_name}Spec",
             "INVARIANT TypeInvariant",
+            "INVARIANT I1_SingleSettlement",
             "INVARIANT I2_RetryBound",
             "INVARIANT I3_TerminalAbsorption",
             "INVARIANT I4_CircuitRespect",
             "INVARIANT I5_WeightDomainValid",
+            "PROPERTY I1_SingleSettlementProp",
+            "PROPERTY I3_TerminalAbsorptionProp",
+            "PROPERTY I4_CircuitRespectProp",
             "",
         ])
 

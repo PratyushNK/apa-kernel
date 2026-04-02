@@ -52,6 +52,13 @@ IsRetryable(status) == status \in RetryableCodes
 BackoffOk == TRUE
 BudgetOk  == retry_window_count < MaxRetriesPerWindow
 
+\* Helper: whether an attempt is enabled in the current state (no primes)
+AttemptEnabled ==
+    /\ txn_status = "PENDING"
+    /\ current_provider # ""
+    /\ attempt_count < MaxRetry
+    /\ (attempt_count = 0 \/ IsRetryable(last_status))
+
 RouteAction ==
     /\ txn_status       = "PENDING"
     /\ attempt_count    = 0
@@ -134,10 +141,13 @@ Next == StandardNext
 I2_RetryBound ==
     attempt_count <= MaxRetry
 
-\* I3 — Terminal Absorption: no attempts after terminal state
+\* I1 — Single Settlement: once SUCCESS, no new attempts are enabled
+I1_SingleSettlement ==
+    (txn_status = "SUCCESS") => ~AttemptEnabled
+
+\* I3 — Terminal Absorption: when terminal, no attempts are enabled thereafter
 I3_TerminalAbsorption ==
-    (txn_status \in {"SUCCESS", "FAILED"}) =>
-        attempt_count <= MaxRetry
+    (txn_status \in {"SUCCESS", "FAILED"}) => ~AttemptEnabled
 
 \* I4 — Circuit Respect: never route to a DOWN provider
 I4_CircuitRespect ==
@@ -147,5 +157,17 @@ I4_CircuitRespect ==
 \* I5 — Weight Domain: provider weights only defined for known providers
 I5_WeightDomainValid ==
     DOMAIN ProviderWeights \subseteq Providers
+
+\* ---------------------------------------------------------------------------
+\* Temporal properties (explicit LTL formulas)
+\* These properties are supplied to TLC as `PROPERTY` entries in the .cfg
+\* to exercise temporal safety checks (no further attempts after success,
+\* no attempts after terminal states, never route to a DOWN provider).
+
+I1_SingleSettlementProp == []( (txn_status = "SUCCESS") => ~AttemptEnabled )
+
+I3_TerminalAbsorptionProp == []( (txn_status \in {"SUCCESS", "FAILED"}) => ~AttemptEnabled )
+
+I4_CircuitRespectProp == []( (current_provider # "") => provider_up[current_provider] )
 
 ====

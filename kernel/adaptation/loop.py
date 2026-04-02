@@ -396,6 +396,7 @@ class AdaptationLoop:
         state.correction_count += 1
 
         # Re-verify correction
+        logger.info("[adaptation] re-verifying corrected proposal (proposal_id=%s)", state.proposal_id)
         is_valid, violations    = self._verifier.check(corrected_theta.model_dump())
         state.verification_pass = is_valid
         state.violations        = violations

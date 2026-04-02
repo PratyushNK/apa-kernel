@@ -53,6 +53,8 @@ class PolicyVector:
     # P5 — Global retry budget
     retry_budget_window_ms  : int          = 60_000  # 1 minute window
     max_retries_per_window  : int          = 200
+    # P6 — per-provider timeout thresholds (ms)
+    timeout_ms              : dict[str, int] = field(default_factory=lambda: {"G1": 300, "G2": 300})
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +196,21 @@ class PolicyEngine:
 
         self._routing_hook = RoutingHook(store, gateway_model)
         self._retry_hook   = RetryHook(store)
+
+        # Apply policy-specified timeouts (P6) to GatewayModel configs if present
+        try:
+            theta = store.current
+            tmap = getattr(theta, "timeout_ms", None)
+            if isinstance(tmap, dict):
+                for prov, t in tmap.items():
+                    if prov in self._gateway_model._configs:
+                        cfg = self._gateway_model._configs[prov]
+                        # apply the value uniformly across regimes
+                        for regime in list(cfg.timeout_ms.keys()):
+                            cfg.timeout_ms[regime] = int(t)
+        except Exception:
+            # non-fatal: keep gateway defaults
+            pass
 
     def choose_provider(self, txn_id: str) -> str:
         return self._routing_hook.choose_provider(txn_id)

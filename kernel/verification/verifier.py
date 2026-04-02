@@ -111,10 +111,11 @@ class InvariantVerifier:
                 logger.exception("TLC attempt raised exception; falling back to Python checks: %s", e)
 
         # Fallback: run existing lightweight numeric invariant checks.
-        violations.extend(self._check_I2_retry_bound(proposed_theta))
-        violations.extend(self._check_provider_weights(proposed_theta))
-        violations.extend(self._check_backoff(proposed_theta))
-        violations.extend(self._check_retry_budget(proposed_theta))
+            violations.extend(self._check_single_settlement(proposed_theta))
+            violations.extend(self._check_I2_retry_bound(proposed_theta))
+            violations.extend(self._check_provider_weights(proposed_theta))
+            violations.extend(self._check_backoff(proposed_theta))
+            violations.extend(self._check_retry_budget(proposed_theta))
 
         return len(violations) == 0, violations
 
@@ -170,4 +171,20 @@ class InvariantVerifier:
         budget = theta.get("max_retries_per_window", 0)
         if budget < 1:
             return [f"P5_retry_budget: max_retries_per_window={budget} must be >= 1"]
+        return []
+
+    # ------------------------------------------------------------------
+    # I1 — Single Settlement (policy-level sanity check)
+    # ------------------------------------------------------------------
+
+    def _check_single_settlement(self, theta: dict) -> list[str]:
+        """
+        Basic policy-level sanity: ensure 'SUCCESS' is not listed as retryable
+        (which would make multiple settlements possible). The full single
+        settlement temporal property is expressed in the TLA spec when TLC
+        is available; this check is a lightweight static safeguard.
+        """
+        retryable = theta.get("retryable_statuses", []) or []
+        if "SUCCESS" in retryable:
+            return ["I1_single_settlement: 'SUCCESS' must not be retryable"]
         return []

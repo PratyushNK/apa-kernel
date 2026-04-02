@@ -23,6 +23,12 @@ class InvariantRisk:
             self.I6_circuit_respect,
             self.I7_sla_breach,
         ])
+    
+    # NOTE: these flags are heuristic detectors derived from observed metrics
+    # (e.g. avg attempts >= max_retry * 0.8). They are used to trigger
+    # adaptation behaviour and diagnostics only. The formal invariants
+    # proven by the TLA+/TLC verifier are a separate artifact and are not
+    # equivalent to these heuristic breach flags.
 
 
 @dataclass(frozen=True, slots=True)

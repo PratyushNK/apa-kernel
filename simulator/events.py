@@ -48,7 +48,7 @@ EVENT_REGISTRY: dict[str, type] = {}
 # Base Event
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BaseEvent:
     """
     Fields present on every event.
@@ -66,7 +66,7 @@ class BaseEvent:
 # Event 1 -- NewTransaction
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class NewTransaction(BaseEvent):
     """
     Emitted once when the simulator creates a new transaction.
@@ -106,7 +106,7 @@ def new_transaction(
 # Event 2 -- RouteDecision
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class RouteDecision(BaseEvent):
     """
     Emitted by the router after selecting a provider for a transaction.
@@ -146,7 +146,7 @@ def route_decision(
 # Event 3 -- AttemptExecution
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AttemptExecution(BaseEvent):
     """
     Emitted when a single execution attempt is dispatched to a provider.
@@ -184,7 +184,7 @@ def attempt_execution(
 # Event 4 -- AttemptResult
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AttemptResult(BaseEvent):
     """
     Emitted when a provider returns a result for an attempt.
@@ -230,7 +230,7 @@ def attempt_result(
 # Event 5 -- RetryDecision
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class RetryDecision(BaseEvent):
     """
     Emitted by the retry engine after evaluating whether to retry.
@@ -268,7 +268,7 @@ def retry_decision(
 # Event 6 -- CircuitEvaluation
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CircuitEvaluation(BaseEvent):
     """
     Emitted by the circuit breaker when it evaluates a provider's health.
