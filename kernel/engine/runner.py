@@ -204,8 +204,7 @@ class KernelEngine:
         return False
 
 
-async def main() -> None:
-
+async def engine_runner() -> None:
     store = PolicyStore(str(POLICIES / "policy.json"))
 
     aggregator = Aggregator(
@@ -218,8 +217,8 @@ async def main() -> None:
 
     # For local validation run with the MockLLM for deterministic, fast behavior
     #llm = GeminiLLM()
-    llm = AzureOpenAILLM("o4-mini")
-    #llm = MockLLM()
+    #llm = AzureOpenAILLM("o4-mini")
+    llm = MockLLM()
 
     adaptation_loop = AdaptationLoop(
         llm          = llm,
@@ -246,6 +245,10 @@ async def main() -> None:
         engine.stop()
         logging.info("[kernel] done")
 
+
+async def main() -> None:
+    await engine_runner()
+    
 
 if __name__ == "__main__":
     asyncio.run(main())

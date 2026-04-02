@@ -11,3 +11,4 @@ data/streams/*
 data/policies/*
 !data/streams/.gitkeep
 !data/policies/.gitkeep
+data/streams/adaptations.jsonl

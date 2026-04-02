@@ -117,6 +117,8 @@ class AdaptationState(BaseModel):
     cycle_count         : int = 0       # max 3 full cycles
     correction_count    : int = 0       # max 1 correction per cycle
     objective           : str = "cure"
+    # Persistent id for the currently proposed policy vector (if any)
+    proposal_id         : Optional[str] = None
 
     # Terminal status
     status              : str = "running"  # running | success | failed | max_cycles

@@ -4,6 +4,7 @@ tla_specs/TB_adapted_*.tla
 tla_specs/TB_base.cfg
 tla_specs/TB_adapted_*.cfg
 tla_specs/states/
+tla_specs/TB_verifier_adapter_*.tla
 
 # Old testbench files
 tla_specs/testbench_*.tla

@@ -34,7 +34,7 @@ aggregator = Aggregator(
     thresholds           = HealthThresholds(),
 )
 
-async def main(debug_eval_ms: int | None = None):
+async def simulation_runner(debug_eval_ms: int | None = None):
     events_path = STREAMS / "events.jsonl"
     if events_path.exists():
         events_path.unlink()
@@ -109,9 +109,9 @@ async def main(debug_eval_ms: int | None = None):
             await asyncio.sleep(0.1)
 
     async def inject_disturbance():
-        await asyncio.sleep(3)   # let healthy baseline establish
+        await asyncio.sleep(3.5)   # let healthy baseline establish
         gateway_model.force_regime("G1", Regime.OUTAGE)
-        print("[disturbance] G1 forced to OUTAGE")
+        print("\n------------------------------\n[disturbance] G1 forced to OUTAGE\n------------------------------\n")
 
     async def gateway_watcher():
         """Watch data/gateway_commands.json for external commands and apply them.
@@ -196,6 +196,10 @@ async def main(debug_eval_ms: int | None = None):
         aggregator.stop()
         await event_stream.flush()
         print("[runner] done.")
+
+
+async def main(debug_eval_ms: int | None = None):
+    await simulation_runner(debug_eval_ms=debug_eval_ms)
 
 
 if __name__ == "__main__":

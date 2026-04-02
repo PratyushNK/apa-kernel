@@ -76,17 +76,18 @@ class InvariantVerifier:
                 if params is None:
                     logger.info("TLC skipped: could not construct PolicyParams; falling back to Python checks")
                 else:
-                    # unique spec name per invocation to avoid metadir collisions
-                    nonce = uuid.uuid4().hex[:8]
-                    spec_name = f"verifier_adapter_{int(time.time())}_{nonce}"
-                    tla_path, cfg_path = TLCConfig(spec_dir).generate(spec_name, params)
-
+                    # Only generate TLA/CFG files if TLC (tla2tools.jar) is available
                     jar_path = spec_dir / "tla2tools.jar"
                     workers = int(os.getenv("VERIFIER_TLC_WORKERS", "2"))
                     tlc = TLCRunner(jar_path, workers=workers)
                     if not tlc.available():
                         logger.info("TLC unavailable (tla2tools.jar missing); falling back to Python checks")
                     else:
+                        # unique spec name per invocation to avoid metadir collisions
+                        nonce = uuid.uuid4().hex[:8]
+                        spec_name = f"verifier_adapter_{int(time.time())}_{nonce}"
+                        tla_path, cfg_path = TLCConfig(spec_dir).generate(spec_name, params)
+
                         logger.info("Running TLC for spec %s (workers=%s)", spec_name, workers)
                         ok, out = tlc.run(tla_path, cfg_path)
 

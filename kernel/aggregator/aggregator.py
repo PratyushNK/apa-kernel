@@ -20,7 +20,6 @@ from kernel.aggregator.snapshot import (
     MetricsSnapshot,
     SnapshotDelta,
 )
-import time
 from kernel.aggregator.window import WindowReader
 
 
@@ -54,24 +53,8 @@ class Aggregator:
         self._clock_ms            : int = 0
         self._gateway_regimes     : dict[str, str] = {}
         self._running             : bool = False
-        
+
         self._breach_detected: bool = False
-        self._last_breach_at: float | None = None
-
-    # Breach API
-    def peek_breach(self) -> bool:
-        """Return whether a breach has been detected (does not clear the flag)."""
-        return self._breach_detected
-
-    def clear_breach_on_adaptation_start(self) -> None:
-        """Explicitly clear the sticky breach when adaptation is known to start."""
-        self._breach_detected = False
-        self._last_breach_at = None
-
-    def last_breach_age(self) -> float | None:
-        if self._last_breach_at is None:
-            return None
-        return time.time() - self._last_breach_at
 
     def pop_breach(self) -> bool:
         """Returns True if breach was detected since last call. Clears the flag."""
@@ -127,10 +110,6 @@ class Aggregator:
         self._current = snapshot
         if snapshot.invariant_risk.any_breach:
             self._breach_detected = True    # sticky flag — stays True until engine clears it
-            try:
-                self._last_breach_at = time.time()
-            except Exception:
-                self._last_breach_at = None
         if self._is_healthy(snapshot):
             self._last_healthy = snapshot
 
