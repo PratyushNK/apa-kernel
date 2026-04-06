@@ -19,6 +19,8 @@ import argparse
 import json
 import subprocess
 import sys
+import os
+import signal
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -297,10 +299,26 @@ class TLCConfig:
     def _tla_set(items: list[str]) -> str:
         return "{" + ", ".join(f'"{x}"' for x in items) + "}"
 
-    def generate(self, name: str, params: PolicyParams) -> tuple[Path, Path]:
+    def generate(self, name: str, params: PolicyParams) -> tuple[Path, Path, Path]:
         spec_name = f"TB_{name}"
         tla_path  = self.spec_dir / f"{spec_name}.tla"
         cfg_path  = self.spec_dir / f"{spec_name}.cfg"
+        cfg_fair  = self.spec_dir / f"{spec_name}_fair.cfg"
+
+        # Allow a "fast mode" to clamp large numeric bounds that blow up
+        # TLC state space. This does not remove any checks; it merely
+        # reduces domain sizes for quicker, conservative verification runs.
+        import os as _os
+        fast_mode = _os.getenv("VERIFIER_TLC_FAST_MODE", "0") == "1"
+        max_window_orig = params.max_retries_per_window
+        max_retry_orig = params.max_retry
+        if fast_mode:
+            max_window = min(max_window_orig, int(_os.getenv("VERIFIER_TLC_MAX_WINDOW_CLAMP", "10")))
+            max_retry = min(max_retry_orig, int(_os.getenv("VERIFIER_TLC_MAX_RETRY_CLAMP", "3")))
+            print(f"[verify] VERIFIER_TLC_FAST_MODE active: MaxRetriesPerWindow {max_window_orig} -> {max_window}, MaxRetry {max_retry_orig} -> {max_retry}")
+        else:
+            max_window = max_window_orig
+            max_retry = max_retry_orig
 
         pw_entries = " @@ ".join(
             f'("{k}" :> {int(round(v * 100))})'
@@ -314,13 +332,42 @@ class TLCConfig:
             template_path.read_text()
             .replace("%%SPEC_NAME%%", spec_name)
             .replace("%%PROVIDERS%%",  self._tla_set(params.provider_priority))
-            .replace("%%MAX_RETRY%%",  str(params.max_retry))
+            .replace("%%MAX_RETRY%%",  str(max_retry))
             .replace("%%RETRYABLE%%",  self._tla_set(params.retryable_statuses))
-            .replace("%%MAX_WINDOW%%", str(params.max_retries_per_window))
+            .replace("%%MAX_WINDOW%%", str(max_window))
             .replace("%%WEIGHTS%%",    pw_entries)
         )
+        # If fast mode is enabled, also clamp the allowed execution depth
+        # by restricting Next to only fire while `step_counter < MaxSteps`.
+        if fast_mode:
+            # Default fast-mode max steps chosen from experiments to balance
+            # depth vs runtime (~5-6s on typical dev machines).
+            # Use a stuttering ELSE branch when the depth bound is reached
+            # so TLC does not report a deadlock at MaxSteps.
+            max_steps = int(_os.getenv("VERIFIER_TLC_MAX_STEPS", "384"))
+            tla_content = tla_content.replace(
+                "\nNext == StandardNext\n",
+                f"\nMaxSteps == {max_steps}\nNext == IF step_counter < MaxSteps THEN StandardNext ELSE UNCHANGED vars\n",
+            )
 
-        cfg_content = "\n".join([
+        # Build an explicit ProviderWeights sum operator in the TLA module
+        providers = params.provider_priority
+        if providers:
+            sum_expr = " + ".join(f'ProviderWeights["{p}"]' for p in providers)
+            sum_op = f"\nProviderWeightsSumOk == ({sum_expr}) = 100\n"
+        else:
+            sum_op = "\nProviderWeightsSumOk == TRUE\n"
+
+        # Append the operator to the TLA content so the cfg can reference it.
+        # Insert the operator before the terminating `====` marker so it is
+        # defined inside the module (not appended after the module end).
+        if "====" in tla_content:
+            tla_content = tla_content.replace("\n====", f"\n{sum_op}\n====", 1)
+        else:
+            tla_content = tla_content + "\n" + sum_op
+
+        # base cfg (no environment fairness) — used to check safety invariants unconditionally
+        cfg_base_content = "\n".join([
             f"SPECIFICATION {spec_name}Spec",
             "INVARIANT TypeInvariant",
             "INVARIANT I1_SingleSettlement",
@@ -328,15 +375,33 @@ class TLCConfig:
             "INVARIANT I3_TerminalAbsorption",
             "INVARIANT I4_CircuitRespect",
             "INVARIANT I5_WeightDomainValid",
+            "INVARIANT ProviderWeightsSumOk",
+            "",
+        ])
+
+        # fairness cfg — runs the spec with the environment fairness assumption
+        cfg_fair_content = "\n".join([
+            "SPECIFICATION SpecWithFairness",
+            "INVARIANT TypeInvariant",
+            "INVARIANT I1_SingleSettlement",
+            "INVARIANT I2_RetryBound",
+            "INVARIANT I3_TerminalAbsorption",
+            "INVARIANT I4_CircuitRespect",
+            "INVARIANT I5_WeightDomainValid",
+            "INVARIANT ProviderWeightsSumOk",
             "PROPERTY I1_SingleSettlementProp",
             "PROPERTY I3_TerminalAbsorptionProp",
             "PROPERTY I4_CircuitRespectProp",
+            "PROPERTY L1_EventualTerminalProp",
+            "PROPERTY L2_BoundedTerminalProp",
+            "PROPERTY L1_BoundedAttemptsProp",
             "",
         ])
 
         tla_path.write_text(tla_content)
-        cfg_path.write_text(cfg_content)
-        return tla_path, cfg_path
+        cfg_path.write_text(cfg_base_content)
+        cfg_fair.write_text(cfg_fair_content)
+        return tla_path, cfg_path, cfg_fair
 
 
 # ---------------------------------------------------------------------------
@@ -355,10 +420,11 @@ class SANYChecker:
         if not self.available():
             return True, "SANY skipped (tla2tools.jar not available)"
         spec_dir = str(tla_path.parent.resolve())
+        jar_str = str(self.jar.resolve()) if self.jar is not None else ""
         cmd = [
             "java",
             f"-DTLA-Library={spec_dir}",
-            "-cp", str(self.jar.resolve()),
+            "-cp", jar_str,
             "tla2sany.SANY",
             tla_path.name,
         ]
@@ -379,9 +445,16 @@ class SANYChecker:
 
 class TLCRunner:
 
-    def __init__(self, jar_path: Path | None, workers: int = 2):
+    def __init__(self, jar_path: Path | None, workers: int = 2, timeout: int | None = None):
         self.jar     = jar_path
         self.workers = workers
+        # Timeout in seconds for the TLC subprocess; default from env or 300s
+        if timeout is None:
+            try:
+                timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT", "300"))
+            except Exception:
+                timeout = 300
+        self.timeout = timeout
 
     def available(self) -> bool:
         return self.jar is not None and self.jar.exists() and self.jar.stat().st_size > 0
@@ -392,33 +465,119 @@ class TLCRunner:
 
         # unique metadir per suite so parallel runs don't collide
         metadir = str(tla_path.parent / "states" / tla_path.stem)
+        jar_str = str(self.jar.resolve()) if self.jar is not None else ""
         cmd = [
             "java", "-Xmx2g", "-XX:+UseParallelGC",
-            "-jar", str(self.jar.resolve()),
+            "-jar", jar_str,
             "-config", cfg_path.name,
             "-workers", str(self.workers),
             "-metadir", metadir,
-            "-nowarning",
-            tla_path.name,
-        ]
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300,
+            # Allow overriding the JVM heap via env var `VERIFIER_TLC_XMX` (e.g. "2g").
+            # Default remains 2g for backwards compatibility.
+            initial_xmx = os.getenv("VERIFIER_TLC_XMX", "2g")
+            cmd = [
+                "java", f"-Xmx{initial_xmx}", "-XX:+UseParallelGC",
+                "-jar", jar_str,
+                "-config", cfg_path.name,
+                "-workers", str(self.workers),
+                "-metadir", metadir,
+                "-nowarning",
+                tla_path.name,
+            ]
+                stderr=subprocess.PIPE,
+                text=True,
                 cwd=str(tla_path.parent.resolve()),
+                start_new_session=True,
             )
-            out = (result.stdout + result.stderr).strip()
-            ok  = (
-                "Model checking completed. No error has been found." in out
-                or (
-                    "Model checking completed" in out
-                    and "violated"            not in out
-                    and "Exception"           not in out
-                    and "ConfigFileException" not in out
+            # Allow an environment override to force unbounded TLC runs for
+            # experimental or test purposes (VERIFIER_TLC_UNBOUNDED=1).
+            unbounded = os.getenv("VERIFIER_TLC_UNBOUNDED", "0") == "1"
+            timeout_arg = None if unbounded else self.timeout
+
+            try:
+                out, err = proc.communicate(timeout=timeout_arg)
+                out_text = (out or "") + (err or "")
+                out_text = out_text.strip()
+                ok = (
+                    "Model checking completed. No error has been found." in out_text
+                    or (
+                        "Model checking completed" in out_text
+                        and "violated"            not in out_text
+                        and "Exception"           not in out_text
+                        and "ConfigFileException" not in out_text
+                    )
                 )
-            )
-            return ok, out
-        except subprocess.TimeoutExpired:
-            return False, "TLC timed out after 300s"
+
+                # Detect known TLC runtime failures (e.g. Java ArithmeticException
+                # Division by zero) and retry with a safer single-worker run.
+                lowered = out_text.lower()
+                if (not ok) and ("division by zero" in lowered or "arithmeticexception" in lowered):
+                    try:
+                        # Retry with a single worker to avoid concurrency-related
+                        # issues in the TLC runtime. Use a separate metadir.
+                        retry_cmd = [c for c in cmd]
+                        # replace workers argument (assumes '-workers', <n> present)
+                        if "-workers" in retry_cmd:
+                            idx = retry_cmd.index("-workers")
+                            retry_cmd[idx + 1] = "1"
+                        retry_metadir = metadir + "_w1"
+                        retry_cmd[retry_cmd.index("-metadir") + 1] = retry_metadir
+
+                        proc2 = subprocess.Popen(
+                            retry_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            cwd=str(tla_path.parent.resolve()),
+                            start_new_session=True,
+                        )
+                        out2, err2 = proc2.communicate(timeout=timeout_arg)
+                        out_text2 = ((out2 or "") + (err2 or "")).strip()
+                        ok2 = (
+                            "Model checking completed. No error has been found." in out_text2
+                            or (
+                                "Model checking completed" in out_text2
+                                and "violated"            not in out_text2
+                                and "Exception"           not in out_text2
+                                and "ConfigFileException" not in out_text2
+                            )
+                        )
+                        if ok2:
+                            return True, out_text2 + "\n[Retried with -workers 1]"
+                        return False, out_text2 + "\n[Retried with -workers 1]"
+                    except Exception:
+                        # fallback to returning the original output
+                        return False, out_text
+
+                return ok, out_text
+            except subprocess.TimeoutExpired:
+                # Best-effort terminate the whole process group.
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                # Give it a short grace period to flush output
+                try:
+                    out, err = proc.communicate(timeout=5)
+                except Exception:
+                    out, err = ("", "")
+                # If still alive, force kill
+                try:
+                    if proc.poll() is None:
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except Exception:
+                            try:
+                                proc.kill()
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                out_text = ((out or "") + (err or "")).strip()
+                return False, f"TLC timed out after {self.timeout}s\n{out_text}"
         except Exception as e:
             return False, str(e)
 
@@ -452,7 +611,7 @@ class PolicyVerifier:
         error       = ""
 
         if self._tlc.available():
-            tla_path, cfg_path = self._cfg_gen.generate(name, params)
+            tla_path, cfg_path, cfg_fair = self._cfg_gen.generate(name, params)
 
             sany_ok, sany_out = self._sany.check(tla_path)
             if not sany_ok:

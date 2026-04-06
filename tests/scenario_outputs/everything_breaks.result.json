@@ -1,0 +1,12 @@
+{
+  "scenario": "Everything Breaks",
+  "disturbance": "everything_breaks",
+  "injection_index": 270,
+  "injection_ts_ms": 1775490758986,
+  "breach_ts_ms": 1775490764030,
+  "time_to_breach_ms": 5044,
+  "adaptation_cycles": null,
+  "recovered_confirmed": false,
+  "approval_before": 0.8461538461538461,
+  "approval_after": 0.6923076923076923
+}

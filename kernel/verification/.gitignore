@@ -16,3 +16,5 @@ tla_specs/tla2tools.jar
 # Python
 __pycache__/
 *.pyc
+
+tla_specs/*

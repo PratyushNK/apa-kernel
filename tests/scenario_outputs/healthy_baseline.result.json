@@ -1,0 +1,12 @@
+{
+  "scenario": "Healthy Baseline",
+  "disturbance": "healthy_baseline",
+  "injection_index": 270,
+  "injection_ts_ms": 1775490409257,
+  "breach_ts_ms": null,
+  "time_to_breach_ms": null,
+  "adaptation_cycles": 0,
+  "recovered_confirmed": false,
+  "approval_before": 0.9230769230769231,
+  "approval_after": 0.9629629629629629
+}

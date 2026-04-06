@@ -8,10 +8,11 @@ VARIABLES
     current_provider,
     provider_up,
     retry_window_count,
-    extra_state
+    extra_state,
+    step_counter
 
 vars == << txn_status, attempt_count, last_status, current_provider,
-           provider_up, retry_window_count, extra_state >>
+           provider_up, retry_window_count, extra_state, step_counter >>
 
 Providers           == %%PROVIDERS%%
 MaxRetry            == %%MAX_RETRY%%
@@ -33,6 +34,8 @@ TypeInvariant ==
     /\ retry_window_count \in Nat
     /\ DOMAIN extra_state \subseteq STRING
 
+    /\ step_counter       \in Nat
+
 Init ==
     /\ txn_status         = "PENDING"
     /\ attempt_count      = 0
@@ -41,6 +44,8 @@ Init ==
     /\ provider_up        = [p \in Providers |-> TRUE]
     /\ retry_window_count = 0
     /\ extra_state        = [k \in {} |-> ""]
+
+    /\ step_counter       = 0
 
 UpProviders == { p \in Providers : provider_up[p] = TRUE }
 
@@ -61,17 +66,18 @@ AttemptEnabled ==
 
 RouteAction ==
     /\ txn_status       = "PENDING"
-    /\ attempt_count    = 0
     /\ current_provider = ""
     /\ LET p == ChooseProvider IN
        IF p = ""
        THEN /\ txn_status'       = "FAILED"
             /\ current_provider' = ""
-            /\ UNCHANGED << attempt_count, last_status,
-                            provider_up, retry_window_count, extra_state >>
+              /\ UNCHANGED << attempt_count, last_status,
+                                provider_up, retry_window_count, extra_state >>
+              /\ step_counter' = step_counter + 1
        ELSE /\ current_provider' = p
-            /\ UNCHANGED << txn_status, attempt_count, last_status,
-                            provider_up, retry_window_count, extra_state >>
+             /\ UNCHANGED << txn_status, attempt_count, last_status,
+                              provider_up, retry_window_count, extra_state >>
+             /\ step_counter' = step_counter + 1
 
 AttemptAction ==
     /\ txn_status       = "PENDING"
@@ -79,12 +85,13 @@ AttemptAction ==
     /\ attempt_count    < MaxRetry
     /\ (attempt_count = 0 \/ IsRetryable(last_status))
     /\ attempt_count'   = attempt_count + 1
+    /\ step_counter'    = step_counter + 1
     /\ \E outcome \in AttemptStatuses :
            /\ last_status' = outcome
            /\ IF outcome = "SUCCESS"
-              THEN /\ txn_status' = "SUCCESS"
-                   /\ UNCHANGED << current_provider, provider_up,
-                                   retry_window_count, extra_state >>
+                THEN /\ txn_status' = "SUCCESS"
+                    /\ UNCHANGED << current_provider, provider_up,
+                                retry_window_count, extra_state >>
               ELSE UNCHANGED << txn_status, current_provider, provider_up,
                                 retry_window_count, extra_state >>
 
@@ -95,6 +102,7 @@ RetryAction ==
     /\ IsRetryable(last_status)
     /\ BudgetOk
     /\ retry_window_count' = retry_window_count + 1
+    /\ step_counter'       = step_counter + 1
     /\ LET p == ChooseProvider IN
        /\ current_provider' = IF p = "" THEN current_provider ELSE p
     /\ UNCHANGED << txn_status, attempt_count, last_status,
@@ -109,6 +117,7 @@ TerminalFailAction ==
     /\ txn_status' = "FAILED"
     /\ UNCHANGED << attempt_count, last_status, current_provider,
                     provider_up, retry_window_count, extra_state >>
+    /\ step_counter' = step_counter + 1
 
 ProviderDownAction ==
     /\ \E p \in Providers :
@@ -117,6 +126,7 @@ ProviderDownAction ==
            /\ current_provider' = IF current_provider = p THEN "" ELSE current_provider
     /\ UNCHANGED << txn_status, attempt_count, last_status,
                     retry_window_count, extra_state >>
+    /\ step_counter' = step_counter + 1
 
 ProviderRecoverAction ==
     /\ \E p \in Providers :
@@ -124,6 +134,7 @@ ProviderRecoverAction ==
            /\ provider_up'   = [provider_up EXCEPT ![p] = TRUE]
     /\ UNCHANGED << txn_status, attempt_count, last_status,
                     current_provider, retry_window_count, extra_state >>
+    /\ step_counter' = step_counter + 1
 
 StandardNext ==
     \/ RouteAction
@@ -135,7 +146,14 @@ StandardNext ==
 
 Next == StandardNext
 
+\* Fairness constraints: require that attempt, retry and routing actions
+\* are not indefinitely ignored by the environment when enabled.
 %%SPEC_NAME%%Spec == Init /\ [][Next]_vars
+
+\* Environment fairness assumption: if a provider goes down, it will eventually recover.
+EnvFairness == WF_vars(ProviderRecoverAction)
+
+SpecWithFairness == Init /\ [][Next]_vars /\ EnvFairness
 
 \* I2 — Retry Bound: attempt_count never exceeds MAX_RETRY
 I2_RetryBound ==
@@ -169,5 +187,26 @@ I1_SingleSettlementProp == []( (txn_status = "SUCCESS") => ~AttemptEnabled )
 I3_TerminalAbsorptionProp == []( (txn_status \in {"SUCCESS", "FAILED"}) => ~AttemptEnabled )
 
 I4_CircuitRespectProp == []( (current_provider # "") => provider_up[current_provider] )
+
+\* ---------------------------------------------------------------------------
+\* Liveness / recovery properties:
+\*  - L1: Eventual terminality — a pending transaction eventually becomes
+\*        either SUCCESS or FAILED (no permanent livelock).
+\*  - L2: Eventual routing — if there exists an up provider, eventually a
+\*        non-empty `current_provider` will be set (route progress).
+\*
+\* Note: these are stronger assumptions about the environment; the
+\* fairness constraints above help TLC explore execution traces where
+\* enabled actions are not indefinitely ignored.
+
+L1_EventualTerminalProp == []( txn_status = "PENDING" => <> (txn_status \in {"SUCCESS","FAILED"}) )
+
+terminal_reached == txn_status \in {"SUCCESS", "FAILED"}
+
+L2_BoundedTerminalProp == <>( step_counter >= MaxRetry \/ terminal_reached )
+
+\* Bounded-attempts recovery: either the transaction reaches a terminal
+\* state or the attempt counter reaches the configured `MaxRetry` bound.
+L1_BoundedAttemptsProp == []( txn_status = "PENDING" => <> (txn_status \in {"SUCCESS","FAILED"} \/ attempt_count >= MaxRetry) )
 
 ====

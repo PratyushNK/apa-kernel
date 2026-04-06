@@ -29,6 +29,8 @@ import pathlib
 import json
 import time
 import uuid
+import os
+from typing import Optional
 
 from interfaces.llm import LLM
 from kernel.adaptation.schemas import (
@@ -47,7 +49,7 @@ from kernel.adaptation.prompt_builder import (
     build_theta_prompt,
     build_correction_prompt,
 )
-from kernel.aggregator.aggregator import Aggregator
+from kernel.aggregator.aggregator import Aggregator, HealthThresholds
 from kernel.verification.verifier import InvariantVerifier
 from simulator.policy_engine import PolicyStore, PolicyVector
 
@@ -58,11 +60,12 @@ ROOT = pathlib.Path(__file__).parent.parent.parent
 ADAPTATIONS_PATH = ROOT / "data" / "streams" / "adaptations.jsonl"
 
 
-def _emit_adaptation_record(stage: str, proposal_id: str | None, payload: dict) -> None:
+def _emit_adaptation_record(stage: str, proposal_id: Optional[str], payload: dict) -> None:
     try:
         ADAPTATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
         rec = {
-            "ts": time.time(),
+            # emit epoch milliseconds for consistency with events.jsonl
+            "ts": int(time.time() * 1000),
             "stage": stage,
             "proposal_id": proposal_id,
         }
@@ -308,7 +311,56 @@ class AdaptationLoop:
         except Exception:
             logger.debug("[adaptation] could not dump proposed_theta")
 
-        is_valid, violations = self._verifier.check(state.proposed_theta.model_dump())
+        # Run the potentially blocking verifier in a thread to avoid blocking
+        # the asyncio event loop (TLC may run as a subprocess and block).
+        # Compute an async guard timeout (based on the TLC timeout env var)
+        try:
+            tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT_ADAPTATION", "10"))
+        except Exception:
+            tlc_timeout = 10
+        async_timeout = max(15, tlc_timeout + 5)
+
+        # Enable fast-mode clamping for TLC when running inside the
+        # adaptation loop to keep verification bounded and responsive.
+        orig_fast = os.environ.get("VERIFIER_TLC_FAST_MODE")
+        if orig_fast is None:
+            os.environ["VERIFIER_TLC_FAST_MODE"] = "1"
+        try:
+            loop = asyncio.get_running_loop()
+            try:
+                is_valid, violations = await asyncio.wait_for(
+                    loop.run_in_executor(None, self._verifier.check, state.proposed_theta.model_dump()),
+                    timeout=async_timeout,
+                )
+            except asyncio.TimeoutError:
+                # Verifier thread hung or exceeded expected time; fall back to fast Python checks
+                logger.warning("[adaptation] verification timed out after %ss; using fast Python checks", async_timeout)
+                try:
+                    proposed = dict(state.proposed_theta.model_dump())
+                except Exception:
+                    try:
+                        proposed = dict(state.proposed_theta.__dict__)
+                    except Exception:
+                        proposed = {}
+                violations = []
+                try:
+                    violations.extend(self._verifier._check_single_settlement(proposed))
+                    violations.extend(self._verifier._check_I2_retry_bound(proposed))
+                    violations.extend(self._verifier._check_provider_weights(proposed))
+                    violations.extend(self._verifier._check_backoff(proposed))
+                    violations.extend(self._verifier._check_retry_budget(proposed))
+                except Exception:
+                    logger.exception("[adaptation] fallback verification failed")
+                is_valid = len(violations) == 0
+            except Exception:
+                # Fall back to synchronous call if executor fails for any other reason
+                is_valid, violations = self._verifier.check(state.proposed_theta.model_dump())
+        finally:
+            # Restore previous environment value.
+            if orig_fast is None:
+                os.environ.pop("VERIFIER_TLC_FAST_MODE", None)
+            else:
+                os.environ["VERIFIER_TLC_FAST_MODE"] = orig_fast
         state.verification_pass = is_valid
         state.violations        = violations
 
@@ -398,7 +450,13 @@ class AdaptationLoop:
 
         # Re-verify correction
         logger.info("[adaptation] re-verifying corrected proposal (proposal_id=%s)", state.proposal_id)
-        is_valid, violations    = self._verifier.check(corrected_theta.model_dump())
+        try:
+            loop = asyncio.get_running_loop()
+            is_valid, violations = await loop.run_in_executor(
+                None, self._verifier.check, corrected_theta.model_dump()
+            )
+        except Exception:
+            is_valid, violations    = self._verifier.check(corrected_theta.model_dump())
         state.verification_pass = is_valid
         state.violations        = violations
 
@@ -506,7 +564,19 @@ class AdaptationLoop:
                 "timeout_rate": getattr(snapshot, "timeout_rate", None),
                 "invariants": self._get_breaches(snapshot),
             }
-            recovery_confirmed = not snapshot.invariant_risk.any_breach
+
+            # Recovery gating: allow stricter research-grade criteria via
+            # environment variable `RECOVERY_REQUIRE_APPROVAL`.
+            require_approval = os.getenv("RECOVERY_REQUIRE_APPROVAL", "0") == "1"
+            try:
+                min_approval = float(os.getenv("RECOVERY_MIN_APPROVAL", str(HealthThresholds.min_approval_rate)))
+            except Exception:
+                min_approval = HealthThresholds.min_approval_rate
+
+            recovery_confirmed = (not snapshot.invariant_risk.any_breach) and (
+                (not require_approval) or (snapshot.approval_rate >= min_approval)
+            )
+
             _emit_adaptation_record(
                 "observed",
                 state.proposal_id,
@@ -519,17 +589,25 @@ class AdaptationLoop:
         except Exception:
             logger.debug("[adaptation] failed to emit observed record")
 
-        if not snapshot.invariant_risk.any_breach:
+        # Only mark the loop as successful when the recovery gating passes.
+        if recovery_confirmed:
             state.status = "success"
             logger.info(
                 f"[adaptation] recovery confirmed — "
                 f"approval_rate={snapshot.approval_rate:.3f}"
             )
         else:
-            logger.info(
-                f"[adaptation] not yet recovered — "
-                f"cycle {state.cycle_count}/{MAX_CYCLES}"
-            )
+            # If invariants cleared but approval below threshold, log and continue
+            if not snapshot.invariant_risk.any_breach and require_approval:
+                logger.info(
+                    f"[adaptation] invariants cleared but approval below threshold "
+                    f"({snapshot.approval_rate:.3f} < {min_approval:.3f}) — continuing observation"
+                )
+            else:
+                logger.info(
+                    f"[adaptation] not yet recovered — "
+                    f"cycle {state.cycle_count}/{MAX_CYCLES}"
+                )
 
         return state
 

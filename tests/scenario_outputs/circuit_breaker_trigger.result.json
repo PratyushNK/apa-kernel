@@ -1,0 +1,12 @@
+{
+  "scenario": "Circuit Breaker Trigger",
+  "disturbance": "circuit_breaker_trigger",
+  "injection_index": 630,
+  "injection_ts_ms": 1775490558548,
+  "breach_ts_ms": null,
+  "time_to_breach_ms": null,
+  "adaptation_cycles": null,
+  "recovered_confirmed": false,
+  "approval_before": 0.8461538461538461,
+  "approval_after": 0.9259259259259259
+}

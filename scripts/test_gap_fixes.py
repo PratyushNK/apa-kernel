@@ -49,12 +49,14 @@ class GapFixesTest(unittest.TestCase):
             tmp = Path(td)
             self._copy_template(tmp)
             cfggen = TLCConfig(tmp)
-            tla_path, cfg_path = cfggen.generate('unit_test', PolicyParams.base())
+            tla_path, cfg_path, cfg_fair = cfggen.generate('unit_test', PolicyParams.base())
             self.assertTrue(tla_path.exists())
             self.assertTrue(cfg_path.exists())
+            self.assertTrue(cfg_fair.exists())
             cfg_text = cfg_path.read_text(encoding='utf-8')
-            self.assertIn('PROPERTY I1_SingleSettlementProp', cfg_text)
             self.assertIn('INVARIANT I1_SingleSettlement', cfg_text)
+            fair_text = cfg_fair.read_text(encoding='utf-8')
+            self.assertIn('PROPERTY I1_SingleSettlementProp', fair_text)
 
     def test_tlc_pass_and_detects_counterexample(self):
         if not self.jar_path.exists():
@@ -66,7 +68,7 @@ class GapFixesTest(unittest.TestCase):
             cfggen = TLCConfig(tmp)
 
             # Good params -> TLC should pass
-            tla1, cfg1 = cfggen.generate('unit_base', PolicyParams.base())
+            tla1, cfg1, fair1 = cfggen.generate('unit_base', PolicyParams.base())
             tlc = TLCRunner(self.jar_path, workers=1)
             ok, out = tlc.run(tla1, cfg1)
             self.assertTrue(ok, f'TLC should pass for base params; output: {out[:200]}')
@@ -74,7 +76,7 @@ class GapFixesTest(unittest.TestCase):
             # Create a modified TLA to intentionally make AttemptEnabled unconstrained
             bad = PolicyParams()
             bad.retryable_statuses = ['SUCCESS', 'TIMEOUT']
-            tla2, cfg2 = cfggen.generate('unit_bad', bad)
+            tla2, cfg2, fair2 = cfggen.generate('unit_bad', bad)
             # Edit the generated TLA so AttemptEnabled is always TRUE (to force a counterexample)
             txt = tla2.read_text(encoding='utf-8')
             idx = txt.find('AttemptEnabled ==')

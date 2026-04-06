@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class InvariantRisk:
     I2_retry_bound      : bool = False
     I6_circuit_respect  : bool = False
@@ -31,7 +31,7 @@ class InvariantRisk:
     # equivalent to these heuristic breach flags.
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ProviderMetrics:
     provider                : str
     rolling_success_rate    : float = 0.0
@@ -42,7 +42,7 @@ class ProviderMetrics:
     circuit_open_rate       : float = 0.0
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class MetricsSnapshot:
     # Window metadata
     window_start_ms          : int
@@ -77,7 +77,7 @@ class MetricsSnapshot:
         return self.window_txn_count >= 20
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SnapshotDelta:
     """
     Degradation from last healthy snapshot to current.

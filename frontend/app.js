@@ -39,6 +39,32 @@ let tick = 0;
 const TAIL_WINDOW = 30;
 let previousMetrics = {};
 let previousPolicy = {};
+// Read theme colors from CSS variables so JS follows the current theme.
+function hexToRgba(hex, alpha) {
+  if (!hex) return `rgba(0,0,0,${alpha})`;
+  let h = String(hex).trim();
+  if (h.startsWith("var(")) {
+    const name = h.slice(4, -1).trim();
+    h = getComputedStyle(document.documentElement).getPropertyValue(name) || h;
+  }
+  h = h.replace(/^#/, "");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const num = parseInt(h, 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+const __css = window.getComputedStyle(document.documentElement);
+const COLORS = {
+  good: (__css.getPropertyValue("--good") || "#059669").trim(),
+  warn: (__css.getPropertyValue("--warn") || "#d97706").trim(),
+  bad: (__css.getPropertyValue("--bad") || "#dc2626").trim(),
+  muted: (__css.getPropertyValue("--muted") || "#6b7280").trim(),
+  text: (__css.getPropertyValue("--text") || "#0f172a").trim(),
+  accent: (__css.getPropertyValue("--accent") || "#0ea5ff").trim(),
+  border: (__css.getPropertyValue("--border") || "#e6edf3").trim(),
+};
 const outageMarkerPlugin = {
   id: "outageMarkerPlugin",
   afterDraw(chartInstance) {
@@ -47,7 +73,7 @@ const outageMarkerPlugin = {
     ctx.save();
     chartState.outageMarkers.forEach((xVal) => {
       const x = scales.x.getPixelForValue(xVal);
-      ctx.strokeStyle = "rgba(239,68,68,0.8)";
+      ctx.strokeStyle = hexToRgba(COLORS.bad, 0.8);
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, chartArea.top);
@@ -139,9 +165,15 @@ function updateEngine(payload) {
   const tlc = payload.tlc || {};
   const tlcEl = document.getElementById("tlcStatus");
   if (tlcEl) {
-    const s = tlc.status ? String(tlc.status).toUpperCase() : "-";
-    tlcEl.textContent = s;
-    tlcEl.className = 'mono' + (s === "PASSED" ? ' tlc-passed' : s === "FAILED" ? ' tlc-failed' : '');
+    // Prefer explicit tlc.result if available; otherwise fall back to status
+    const result = tlc.result ? String(tlc.result).toUpperCase() : (tlc.status ? String(tlc.status).toUpperCase() : "-");
+    const ran = !!tlc.ran;
+    let label = result;
+    if (result === "-" && ran) label = "RAN";
+    // If verification_status is present and differs, append indicator
+    const ver = tlc.verification_status ? String(tlc.verification_status).toUpperCase() : null;
+    tlcEl.textContent = ver && ver !== label ? `${label} (${ver})` : label;
+    tlcEl.className = 'mono' + (result === "PASSED" || ver === "PASSED" ? ' tlc-passed' : result === "FAILED" || ver === "FAILED" ? ' tlc-failed' : '');
   }
   // optionally show violations in adaptation log for visibility
   if (Array.isArray(tlc.violations) && tlc.violations.length > 0) {
@@ -233,7 +265,7 @@ function updateMetrics(payload) {
   });
 
   const lineColorClass = gradeMetric("approval_rate", Number(metrics.approval_rate ?? 0));
-  const lineColor = lineColorClass === "metric-good" ? "#10b981" : lineColorClass === "metric-warn" ? "#f59e0b" : "#ef4444";
+  const lineColor = lineColorClass === "metric-good" ? COLORS.good : lineColorClass === "metric-warn" ? COLORS.warn : COLORS.bad;
   updateChart(Number(metrics.approval_rate ?? 0), lineColor);
 }
 
@@ -311,20 +343,20 @@ function initChart() {
           type: "linear",
           min: 0,
           max: 1,
-          ticks: { color: "#9aa7b7" },
-          grid: { color: "rgba(154,167,183,0.15)" },
+          ticks: { color: COLORS.muted },
+          grid: { color: hexToRgba(COLORS.muted, 0.15) },
         },
         x: {
           type: "linear",
           min: 1,
           max: TAIL_WINDOW,
-          title: { display: true, text: "Time (ticks)", color: "#9aa7b7" },
-          ticks: { color: "#9aa7b7", maxTicksLimit: 6, stepSize: 5 },
-          grid: { color: "rgba(154,167,183,0.08)" },
+          title: { display: true, text: "Time (ticks)", color: COLORS.muted },
+          ticks: { color: COLORS.muted, maxTicksLimit: 6, stepSize: 5 },
+          grid: { color: hexToRgba(COLORS.muted, 0.08) },
         },
       },
       plugins: {
-        legend: { labels: { color: "#d5dde7" } },
+        legend: { labels: { color: COLORS.text } },
       },
     },
   });

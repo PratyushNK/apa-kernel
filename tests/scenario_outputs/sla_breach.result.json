@@ -1,0 +1,12 @@
+{
+  "scenario": "SLA Breach",
+  "disturbance": "sla_breach",
+  "injection_index": 270,
+  "injection_ts_ms": 1775490659548,
+  "breach_ts_ms": 1775490666978,
+  "time_to_breach_ms": 7430,
+  "adaptation_cycles": 3,
+  "recovered_confirmed": false,
+  "approval_before": 0.8846153846153846,
+  "approval_after": 0.5769230769230769
+}

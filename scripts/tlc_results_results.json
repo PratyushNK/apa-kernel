@@ -1,0 +1,445 @@
+{
+  "unsafe_tests": [
+    {
+      "case": "I1_single_settlement",
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SUCCESS",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": false,
+      "violations": [
+        "TLC error: Error: Invariant I1_SingleSettlement is violated by the initial state:"
+      ],
+      "tlc_counterexample": null,
+      "elapsed_sec": 0.942608333
+    },
+    {
+      "case": "I2_retry_bound",
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 6,
+        "retryable_statuses": [
+          "SUCCESS",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": false,
+      "violations": [
+        "TLC error: Error: Invariant I2_RetryBound is violated by the initial state:"
+      ],
+      "tlc_counterexample": null,
+      "elapsed_sec": 0.807359666
+    },
+    {
+      "case": "I4_circuit_respect",
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SUCCESS",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": false,
+      "violations": [
+        "TLC error: Error: Invariant I4_CircuitRespect is violated by the initial state:"
+      ],
+      "tlc_counterexample": null,
+      "elapsed_sec": 0.810313625
+    },
+    {
+      "case": "I5_weight_domain",
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "X": 0.5
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SUCCESS",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": false,
+      "violations": [
+        "TLC error: Error: The invariant of I5_WeightDomainValid is equal to FALSE"
+      ],
+      "tlc_counterexample": null,
+      "elapsed_sec": 0.39285854200000037
+    },
+    {
+      "case": "weight_sum",
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.3,
+          "G2": 0.2
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SUCCESS",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": false,
+      "violations": [
+        "TLC error: Error: The invariant of ProviderWeightsSumOk is equal to FALSE"
+      ],
+      "tlc_counterexample": null,
+      "elapsed_sec": 0.2890382090000001
+    }
+  ],
+  "tlc_timing": [
+    {
+      "id": 1,
+      "changes": {
+        "max_retry": 4
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 4,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.7810117920000001
+    },
+    {
+      "id": 2,
+      "changes": {
+        "base_backoff_ms": 200
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200,
+        "base_backoff_ms": 200
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.8151828329999997
+    },
+    {
+      "id": 3,
+      "changes": {
+        "max_retry": 4,
+        "backoff_multiplier": 1.5
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 4,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200,
+        "backoff_multiplier": 1.5
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.798466833
+    },
+    {
+      "id": 4,
+      "changes": {
+        "provider_weights": {
+          "G1": 0.7,
+          "G2": 0.3
+        }
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.7,
+          "G2": 0.3
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.7982960419999996
+    },
+    {
+      "id": 5,
+      "changes": {
+        "provider_priority": [
+          "G1",
+          "G2",
+          "G3"
+        ],
+        "provider_weights": {
+          "G1": 0.3333,
+          "G2": 0.3333,
+          "G3": 0.3333
+        }
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2",
+          "G3"
+        ],
+        "provider_weights": {
+          "G1": 0.3333,
+          "G2": 0.3333,
+          "G3": 0.3333
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.8206299999999995
+    },
+    {
+      "id": 6,
+      "changes": {
+        "max_retry": 5,
+        "max_retries_per_window": 500,
+        "retryable_statuses": [
+          "TIMEOUT"
+        ]
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 5,
+        "retryable_statuses": [
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 500
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.8139294999999995
+    },
+    {
+      "id": 7,
+      "changes": {
+        "provider_priority": [
+          "G1",
+          "G2",
+          "G3"
+        ],
+        "provider_weights": {
+          "G1": 0.6,
+          "G2": 0.3,
+          "G3": 0.1
+        },
+        "backoff_multiplier": 2.5
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2",
+          "G3"
+        ],
+        "provider_weights": {
+          "G1": 0.6,
+          "G2": 0.3,
+          "G3": 0.1
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200,
+        "backoff_multiplier": 2.5
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.813880708000001
+    },
+    {
+      "id": 8,
+      "changes": {
+        "weight_learning_rate": 0.05,
+        "provider_weights": {
+          "G1": 0.6,
+          "G2": 0.4
+        },
+        "max_retry": 2
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.6,
+          "G2": 0.4
+        },
+        "max_retry": 2,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200,
+        "weight_learning_rate": 0.05
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.8023021670000006
+    },
+    {
+      "id": 9,
+      "changes": {
+        "base_backoff_ms": 250,
+        "backoff_multiplier": 1.25,
+        "max_retry": 3,
+        "max_retries_per_window": 150
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2"
+        ],
+        "provider_weights": {
+          "G1": 0.5,
+          "G2": 0.5
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 150,
+        "base_backoff_ms": 250,
+        "backoff_multiplier": 1.25
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.8084567089999997
+    },
+    {
+      "id": 10,
+      "changes": {
+        "provider_priority": [
+          "G1",
+          "G2",
+          "G3",
+          "G4"
+        ],
+        "provider_weights": {
+          "G1": 0.25,
+          "G2": 0.25,
+          "G3": 0.25,
+          "G4": 0.25
+        },
+        "max_retry": 3,
+        "backoff_multiplier": 1.75,
+        "base_backoff_ms": 120
+      },
+      "theta": {
+        "provider_priority": [
+          "G1",
+          "G2",
+          "G3",
+          "G4"
+        ],
+        "provider_weights": {
+          "G1": 0.25,
+          "G2": 0.25,
+          "G3": 0.25,
+          "G4": 0.25
+        },
+        "max_retry": 3,
+        "retryable_statuses": [
+          "SOFT_DECLINE",
+          "TIMEOUT"
+        ],
+        "max_retries_per_window": 200,
+        "backoff_multiplier": 1.75,
+        "base_backoff_ms": 120
+      },
+      "ok": true,
+      "violations": [],
+      "elapsed_sec": 0.8518346250000004
+    }
+  ]
+}

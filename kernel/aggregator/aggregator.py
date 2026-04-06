@@ -40,7 +40,7 @@ class Aggregator:
         window_size_ms      : int   = 5_000,
         heartbeat_interval_s: float = 5.0,
         max_retry           : int   = 3,
-        thresholds          : HealthThresholds | None = None,
+        thresholds          : Optional[HealthThresholds] = None,
     ):
         self._reader              = WindowReader(log_path)
         self._window_size_ms      = window_size_ms
@@ -75,6 +75,16 @@ class Aggregator:
     def stop(self) -> None:
         self._running = False
 
+    def reset(self) -> None:
+        """Reset internal runtime metrics so the Aggregator can be
+        reused for a fresh experiment run in the same process.
+        """
+        self._current = None
+        self._last_healthy = None
+        self._clock_ms = 0
+        self._gateway_regimes = {}
+        self._running = False
+        self._breach_detected = False
     def _tick(self) -> None:
         snapshot = self._reader.compute(self._window_size_ms, self._max_retry)
         

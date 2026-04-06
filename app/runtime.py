@@ -49,6 +49,10 @@ class RuntimeState:
     tlc_status: str | None = None
     tlc_violations: list[str] | None = None
     tlc_output_path: str | None = None
+    # New fields to disambiguate TLC model-checker vs Python fallback
+    tlc_ran: bool = False
+    tlc_result: str | None = None  # one of 'passed','failed','timed_out','error', or None
+    verification_status: str | None = None  # overall verifier outcome: 'passed'|'failed'|None
 
 
 state = RuntimeState()
@@ -174,9 +178,18 @@ async def capture_process_output(proc: asyncio.subprocess.Process, buffer: deque
         buffer.append(text)
         if "[adaptation]" in text:
             adaptation_logger.info(text)
+            lower = text.lower()
+            # Reset TLC markers at the start of a new adaptation loop
             if "starting loop" in text:
                 state.last_trigger = text
                 state.adaptation_status = "running"
+                state.tlc_ran = False
+                state.tlc_result = None
+                state.verification_status = None
+                state.tlc_violations = None
+                state.tlc_output_path = None
+                state.tlc_status = None
+
             if "loop ended" in text or "policy deployed" in text:
                 state.last_status = text
                 # try to extract explicit loop-ended status
@@ -189,28 +202,46 @@ async def capture_process_output(proc: asyncio.subprocess.Process, buffer: deque
                     state.adaptation_status = "success"
                 if "max cycles reached" in text:
                     state.adaptation_status = "max_cycles"
-            # parse TLC verification results from adaptation log lines
-            lower = text.lower()
-            if "verification passed" in lower:
-                state.tlc_status = "passed"
+
+            # Detect explicit TLC run start/result messages emitted by the verifier
+            if "running tlc for spec" in lower:
+                state.tlc_ran = True
+                state.tlc_result = None
+                state.tlc_status = "running"
+
+            if "tlc passed for spec" in lower or "tlc passed" in lower:
+                state.tlc_ran = True
+                state.tlc_result = "passed"
                 state.tlc_violations = None
+                state.tlc_status = "passed"
+
+            if "tlc run timed out or errored" in lower or "tlc timed out after" in lower:
+                state.tlc_ran = True
+                state.tlc_result = "timed_out"
+                state.tlc_status = "timed_out"
+
+            # parse overall verifier outcome (Python fallback or TLC) — do not
+            # overwrite tlc_result, keep separate verification_status
+            if "verification passed" in lower:
+                state.verification_status = "passed"
+                # Map an overall verifier pass to tlc_status if no explicit
+                # model-checker result was recorded (Python fallback case).
+                if not state.tlc_result:
+                    state.tlc_status = "passed"
             if "verification failed" in lower:
-                # mark TLC if message refers to TLC
-                if "tlc" in text or "tlc" in lower:
-                    state.tlc_status = "failed"
-                else:
-                    state.tlc_status = "failed"
+                state.verification_status = "failed"
                 # try to extract violations text after a dash or colon
+                import re as _re2
                 mviol = _re2.search(r"verification failed.*?[-:\u2014]\s*(.*)", text)
                 if mviol:
                     vals = mviol.group(1)
-                    # split on semicolon or comma for readability
                     state.tlc_violations = [v.strip() for v in re.split(r"[;,:]", vals) if v.strip()]
                 else:
-                    # fallback: capture whole line
                     state.tlc_violations = [text]
+                if not state.tlc_result:
+                    state.tlc_status = "failed"
+
             # Parse explicit cycle counts from adaptation logs where possible
-            # e.g. "not yet recovered — cycle 2/3" or "cycle 1 — verification failed"
             import re
             m = re.search(r"cycle\s+(\d+)(?:\s*/\s*(\d+))?", text)
             if m:
