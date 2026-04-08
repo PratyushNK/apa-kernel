@@ -123,5 +123,8 @@ class AdaptationState(BaseModel):
     # Persistent id for the currently proposed policy vector (if any)
     proposal_id         : Optional[str] = None
 
+    # Prior policy theta snapshot (used for rollback/canary)
+    prior_theta         : Optional[dict] = None
+
     # Terminal status
     status              : str = "running"  # running | success | failed | max_cycles

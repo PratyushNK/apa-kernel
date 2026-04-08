@@ -16,7 +16,7 @@ import logging
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -51,7 +51,7 @@ class InvariantVerifier:
         except Exception:
             return None
 
-    def check(self, proposed_theta: dict) -> tuple[bool, list[str]]:
+    def check(self, proposed_theta: dict, fast_mode: Optional[bool] = None, tlc_timeout_override: Optional[int] = None) -> tuple[bool, list[str]]:
         """
         Validate proposed policy vector against all invariants.
 
@@ -83,17 +83,21 @@ class InvariantVerifier:
                     # runners can request an unbounded TLC run. If
                     # VERIFIER_TLC_TIMEOUT_ADAPTATION is set to one of
                     # ('none','unbounded','') treat it as no timeout.
-                    tlc_timeout_env = os.getenv("VERIFIER_TLC_TIMEOUT_ADAPTATION")
-                    if tlc_timeout_env is None:
-                        tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT", "300"))
+                    # Allow caller to override TLC timeout programmatically
+                    if tlc_timeout_override is not None:
+                        tlc_timeout = tlc_timeout_override
                     else:
-                        if str(tlc_timeout_env).lower() in ("", "none", "unbounded", "null"):
-                            tlc_timeout = None
+                        tlc_timeout_env = os.getenv("VERIFIER_TLC_TIMEOUT_ADAPTATION")
+                        if tlc_timeout_env is None:
+                            tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT", "300"))
                         else:
-                            try:
-                                tlc_timeout = int(tlc_timeout_env)
-                            except Exception:
-                                tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT", "300"))
+                            if str(tlc_timeout_env).lower() in ("", "none", "unbounded", "null"):
+                                tlc_timeout = None
+                            else:
+                                try:
+                                    tlc_timeout = int(tlc_timeout_env)
+                                except Exception:
+                                    tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT", "300"))
 
                     tlc = TLCRunner(jar_path, workers=workers, timeout=tlc_timeout)
                     if not tlc.available():
@@ -157,7 +161,9 @@ class InvariantVerifier:
         # space smaller. Run the Python fallback against the same clamped
         # values so results are consistent between TLC and Python checks.
         fallback_theta = dict(proposed_theta or {})
-        if os.getenv("VERIFIER_TLC_FAST_MODE", "0") == "1":
+        # Respect programmatic override for fast-mode if provided, otherwise env var
+        is_fast = fast_mode if fast_mode is not None else (os.getenv("VERIFIER_TLC_FAST_MODE", "0") == "1")
+        if is_fast:
             try:
                 max_window_clamp = int(os.getenv("VERIFIER_TLC_MAX_WINDOW_CLAMP", "10"))
             except Exception:

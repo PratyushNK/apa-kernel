@@ -110,6 +110,8 @@ class AdaptationLoop:
         state   = AdaptationState(context=context, objective=objective)
 
         while state.status == "running":
+            # reset correction attempts per cycle (allow MAX_CORRECTIONS per cycle)
+            state.correction_count = 0
             state = await self._fetch_metrics(state)
             state = await self._reason_and_propose(state)
             if state.status != "running":
@@ -320,16 +322,18 @@ class AdaptationLoop:
             tlc_timeout = 10
         async_timeout = max(15, tlc_timeout + 5)
 
-        # Enable fast-mode clamping for TLC when running inside the
-        # adaptation loop to keep verification bounded and responsive.
-        orig_fast = os.environ.get("VERIFIER_TLC_FAST_MODE")
-        if orig_fast is None:
-            os.environ["VERIFIER_TLC_FAST_MODE"] = "1"
+        # Run verification in executor, request fast-mode from verifier API
         try:
             loop = asyncio.get_running_loop()
             try:
                 is_valid, violations = await asyncio.wait_for(
-                    loop.run_in_executor(None, self._verifier.check, state.proposed_theta.model_dump()),
+                    loop.run_in_executor(
+                        None,
+                        self._verifier.check,
+                        state.proposed_theta.model_dump(),
+                        True,
+                        tlc_timeout,
+                    ),
                     timeout=async_timeout,
                 )
             except asyncio.TimeoutError:
@@ -354,13 +358,10 @@ class AdaptationLoop:
                 is_valid = len(violations) == 0
             except Exception:
                 # Fall back to synchronous call if executor fails for any other reason
-                is_valid, violations = self._verifier.check(state.proposed_theta.model_dump())
-        finally:
-            # Restore previous environment value.
-            if orig_fast is None:
-                os.environ.pop("VERIFIER_TLC_FAST_MODE", None)
-            else:
-                os.environ["VERIFIER_TLC_FAST_MODE"] = orig_fast
+                is_valid, violations = self._verifier.check(state.proposed_theta.model_dump(), True, tlc_timeout)
+        except Exception:
+            # If event loop not available or other issue, try synchronous check
+            is_valid, violations = self._verifier.check(state.proposed_theta.model_dump(), True, tlc_timeout)
         state.verification_pass = is_valid
         state.violations        = violations
 
@@ -448,20 +449,65 @@ class AdaptationLoop:
         state.proposed_theta    = corrected_theta
         state.correction_count += 1
 
-        # Re-verify correction
+        # Re-verify correction with same async guard & fast-mode as _verify_invariants
         logger.info("[adaptation] re-verifying corrected proposal (proposal_id=%s)", state.proposal_id)
         try:
-            loop = asyncio.get_running_loop()
-            is_valid, violations = await loop.run_in_executor(
-                None, self._verifier.check, corrected_theta.model_dump()
-            )
+            try:
+                tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT_ADAPTATION", "10"))
+            except Exception:
+                tlc_timeout = 10
+            async_timeout = max(15, tlc_timeout + 5)
+
+            try:
+                loop = asyncio.get_running_loop()
+                try:
+                    is_valid, violations = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            None,
+                            self._verifier.check,
+                            corrected_theta.model_dump(),
+                            True,
+                            tlc_timeout,
+                        ),
+                        timeout=async_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("[adaptation] correction verification timed out after %ss; using fast Python checks", async_timeout)
+                    try:
+                        proposed = dict(corrected_theta.model_dump())
+                    except Exception:
+                        try:
+                            proposed = dict(corrected_theta.__dict__)
+                        except Exception:
+                            proposed = {}
+                    violations = []
+                    try:
+                        violations.extend(self._verifier._check_single_settlement(proposed))
+                        violations.extend(self._verifier._check_I2_retry_bound(proposed))
+                        violations.extend(self._verifier._check_provider_weights(proposed))
+                        violations.extend(self._verifier._check_backoff(proposed))
+                        violations.extend(self._verifier._check_retry_budget(proposed))
+                    except Exception:
+                        logger.exception("[adaptation] correction fallback verification failed")
+                    is_valid = len(violations) == 0
+                except Exception:
+                    # Fall back to synchronous call if executor fails for any other reason
+                    is_valid, violations = self._verifier.check(corrected_theta.model_dump(), True, tlc_timeout)
+            except Exception:
+                # As a last resort, do a synchronous check
+                is_valid, violations = self._verifier.check(corrected_theta.model_dump(), True, tlc_timeout)
         except Exception:
-            is_valid, violations    = self._verifier.check(corrected_theta.model_dump())
+            # As a last resort, do a synchronous check
+            is_valid, violations = self._verifier.check(corrected_theta.model_dump(), True, tlc_timeout)
+
         state.verification_pass = is_valid
-        state.violations        = violations
+        state.violations = violations
 
         if is_valid:
             logger.info("[adaptation] correction passed verification")
+        else:
+            logger.warning(f"[adaptation] correction still invalid — {violations}")
+
         # emit correction record
         try:
             _emit_adaptation_record(
@@ -476,8 +522,6 @@ class AdaptationLoop:
             )
         except Exception:
             logger.debug("[adaptation] failed to emit correction record")
-        else:
-            logger.warning(f"[adaptation] correction still invalid — {violations}")
 
         return state
 
@@ -499,8 +543,17 @@ class AdaptationLoop:
                     "provider_weights": getattr(prior_obj, "provider_weights", None),
                     "max_retry": getattr(prior_obj, "max_retry", None),
                 }
+                # save full prior theta for potential rollback
+                try:
+                    state.prior_theta = dict(prior_obj.__dict__)
+                except Exception:
+                    try:
+                        state.prior_theta = dict(prior_obj.__dict__)
+                    except Exception:
+                        state.prior_theta = None
             except Exception:
                 prior = None
+            # Deploy new theta (canary-style: we keep prior in state to allow rollback)
             self._policy_store.update(new_theta)
             logger.info(
                 f"[adaptation] policy deployed — "
@@ -597,6 +650,34 @@ class AdaptationLoop:
                 f"approval_rate={snapshot.approval_rate:.3f}"
             )
         else:
+            # If invariants re-appear after deployment, revert to prior theta
+            try:
+                if snapshot.invariant_risk.any_breach:
+                    if getattr(state, "prior_theta", None):
+                        try:
+                            prior_vec = PolicyVector(**state.prior_theta)
+                            self._policy_store.update(prior_vec)
+                            logger.warning("[adaptation] post-deploy invariants detected — reverted to prior policy (proposal_id=%s)", state.proposal_id)
+                            try:
+                                _emit_adaptation_record(
+                                    "reverted",
+                                    state.proposal_id,
+                                    {
+                                        "reverted_to": {
+                                            "provider_weights": getattr(prior_vec, "provider_weights", None),
+                                            "max_retry": getattr(prior_vec, "max_retry", None),
+                                        },
+                                        "post_snapshot": post_snapshot,
+                                    },
+                                )
+                            except Exception:
+                                logger.debug("[adaptation] failed to emit reverted record")
+                        except Exception:
+                            logger.exception("[adaptation] failed to revert to prior policy")
+                    else:
+                        logger.warning("[adaptation] post-deploy invariants detected but no prior policy available to revert to")
+            except Exception:
+                logger.exception("[adaptation] error while handling post-deploy revert logic")
             # If invariants cleared but approval below threshold, log and continue
             if not snapshot.invariant_risk.any_breach and require_approval:
                 logger.info(
