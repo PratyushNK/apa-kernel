@@ -126,5 +126,9 @@ class AdaptationState(BaseModel):
     # Prior policy theta snapshot (used for rollback/canary)
     prior_theta         : Optional[dict] = None
 
+    # Timestamp (ms) when the current proposal was deployed. Used to
+    # ensure observation windows reflect post-deploy traffic only.
+    deployed_at_ms      : Optional[int] = None
+
     # Terminal status
     status              : str = "running"  # running | success | failed | max_cycles

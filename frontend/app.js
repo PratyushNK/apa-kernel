@@ -287,7 +287,11 @@ async function post(url) {
 }
 
 function attachControls() {
-  document.getElementById("startBtn").addEventListener("click", async () => post("/start"));
+  document.getElementById("startBtn").addEventListener("click", async () => {
+    // Clear Agent Decisions UI immediately for a fresh run
+    try { const box = document.getElementById('agentLog'); if (box) box.innerHTML = ''; } catch (e) {}
+    await post("/start");
+  });
   document.getElementById("stopBtn").addEventListener("click", async () => {
     try {
       await post("/stop");
@@ -304,6 +308,8 @@ function attachControls() {
       toLines("kernelLog", []);
       toLines("eventTail", []);
       toLines("adaptationLog", []);
+      // clear agent decisions panel as well when stopping
+      try { renderAgentLog([]); } catch (e) {}
       // clear chart data and outage markers
       chartState.points = [];
       chartState.outageMarkers = [];

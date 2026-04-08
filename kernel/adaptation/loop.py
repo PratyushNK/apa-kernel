@@ -649,6 +649,12 @@ class AdaptationLoop:
                 prior = None
             # Deploy new theta (canary-style: we keep prior in state to allow rollback)
             self._policy_store.update(new_theta)
+            # record deployment time (ms) so observation can wait for
+            # a snapshot that includes post-deploy traffic only
+            try:
+                state.deployed_at_ms = int(time.time() * 1000)
+            except Exception:
+                state.deployed_at_ms = None
             logger.info(
                 f"[adaptation] policy deployed — "
                 f"max_retry={new_theta.max_retry} "
@@ -680,9 +686,37 @@ class AdaptationLoop:
 
     async def _observe_outcome(self, state: AdaptationState) -> AdaptationState:
         logger.info(f"[adaptation] waiting {OBSERVE_WAIT_S}s to observe outcome")
+        # Initial sleep gives the system a chance to apply the new policy
         await asyncio.sleep(OBSERVE_WAIT_S)
 
+        # After the initial pause, prefer a snapshot that reflects post-deploy
+        # traffic. Poll the aggregator until we observe a snapshot whose
+        # `window_end_ms` is after the recorded deployment time and which has
+        # sufficient data, up to a reasonable deadline.
+        poll_deadline = time.time() + OBSERVE_WAIT_S + 10.0
         snapshot, _ = self._aggregator.get_snapshot()
+        # Helper to check snapshot freshness and sufficiency
+        def _is_post_deploy(snap: Optional[object]) -> bool:
+            if snap is None:
+                return False
+            # prefer snapshots with sufficient data
+            try:
+                if not getattr(snap, "has_sufficient_data", False):
+                    return False
+            except Exception:
+                return False
+            # if we have a recorded deploy time, ensure snapshot covers later events
+            if getattr(state, "deployed_at_ms", None):
+                try:
+                    return getattr(snap, "window_end_ms", 0) >= int(state.deployed_at_ms)
+                except Exception:
+                    return False
+            return True
+
+        # Poll until we find a post-deploy, sufficient snapshot or until deadline
+        while not _is_post_deploy(snapshot) and time.time() < poll_deadline:
+            await asyncio.sleep(1.0)
+            snapshot, _ = self._aggregator.get_snapshot()
         state.cycle_count += 1
 
         if snapshot is None:

@@ -45,6 +45,11 @@ async def start_processes() -> None:
     state.simulator_log.clear()
     state.kernel_log.clear()
     state.adaptation_log.clear()
+    # Clear any previously captured agent decision events so UI starts fresh
+    try:
+        state.agent_log.clear()
+    except Exception:
+        pass
     state.simulator_proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "simulator/runner.py",
@@ -102,6 +107,7 @@ async def stop() -> JSONResponse:
     state.cycles = 0
     state.simulator_log.clear()
     state.kernel_log.clear()
+    state.agent_log.clear()
     # also clear persistent event stream so aggregator restarts without prior history
     try:
         STREAM_PATH.parent.mkdir(parents=True, exist_ok=True)
