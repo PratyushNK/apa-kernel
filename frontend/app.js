@@ -114,14 +114,26 @@ function setHtml(id, text, className) {
 function toLines(containerId, lines, classifier) {
   const box = document.getElementById(containerId);
   if (!box) return;
-  box.innerHTML = "";
+  // Only auto-scroll when the user is near the bottom; otherwise preserve
+  // their manual scroll position so they can inspect past entries.
+  const nearBottom = (box.scrollHeight - box.clientHeight - box.scrollTop) < 50;
+  const frag = document.createDocumentFragment();
   lines.forEach((line) => {
     const div = document.createElement("div");
     div.className = "log-entry" + (classifier ? ` ${classifier(line)}` : "");
-    div.textContent = typeof line === "string" ? line : JSON.stringify(line);
-    box.appendChild(div);
+    // Prefer a pre-rendered `line` property when present (avoid dumping whole objects)
+    let text;
+    if (typeof line === "string") text = line;
+    else if (line && typeof line === 'object' && 'line' in line) text = line.line;
+    else if (line && typeof line === 'object') text = JSON.stringify(line);
+    else text = String(line);
+    div.textContent = text;
+    frag.appendChild(div);
   });
-  box.scrollTop = box.scrollHeight;
+  // Replace content in one operation for fewer reflows
+  box.innerHTML = "";
+  box.appendChild(frag);
+  if (nearBottom) box.scrollTop = box.scrollHeight;
 }
 
 function updateStatusPill(status) {
@@ -371,6 +383,65 @@ function classifyEventLine(line) {
   return "";
 }
 
+function renderAgentLog(entries) {
+  const box = document.getElementById('agentLog');
+  if (!box) return;
+  // Preserve user scroll unless they're near the bottom
+  const nearBottom = (box.scrollHeight - box.clientHeight - box.scrollTop) < 80;
+  box.innerHTML = '';
+  entries.forEach((e) => {
+    const card = document.createElement('div');
+    card.className = 'log-entry agent-entry';
+    try {
+      const ts = e && e.ts ? new Date(e.ts).toLocaleTimeString() : new Date().toLocaleTimeString();
+      const header = document.createElement('div');
+      header.className = 'agent-header';
+      const badge = document.createElement('div');
+      badge.className = 'agent-badge';
+      badge.textContent = (e && e.stage) ? e.stage.toUpperCase() : 'AGENT';
+      const title = document.createElement('div');
+      title.className = 'agent-meta';
+      title.textContent = `[${ts}] ${e && (e.schema || '')} ${e && e.proposal_id ? '(proposal=' + e.proposal_id + ')' : ''}`;
+      header.appendChild(badge);
+      header.appendChild(title);
+      card.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'agent-body';
+
+      if (e && e.system_prompt) {
+        const sec = document.createElement('div'); sec.className = 'agent-section';
+        const label = document.createElement('div'); label.textContent = 'SYSTEM'; label.className = 'agent-table-key';
+        const pre = document.createElement('pre'); pre.textContent = e.system_prompt;
+        sec.appendChild(label); sec.appendChild(pre); body.appendChild(sec);
+      }
+      if (e && e.prompt) {
+        const sec = document.createElement('div'); sec.className = 'agent-section';
+        const label = document.createElement('div'); label.textContent = 'PROMPT'; label.className = 'agent-table-key';
+        const pre = document.createElement('pre'); pre.textContent = e.prompt;
+        sec.appendChild(label); sec.appendChild(pre); body.appendChild(sec);
+      }
+      if (e && e.response) {
+        const sec = document.createElement('div'); sec.className = 'agent-section';
+        const label = document.createElement('div'); label.textContent = 'RESPONSE'; label.className = 'agent-table-key';
+        const pre = document.createElement('pre'); pre.textContent = typeof e.response === 'string' ? e.response : JSON.stringify(e.response, null, 2);
+        sec.appendChild(label); sec.appendChild(pre); body.appendChild(sec);
+      }
+      if (e && e.error) {
+        const sec = document.createElement('div'); sec.className = 'agent-section agent-error';
+        sec.textContent = 'ERROR: ' + e.error;
+        body.appendChild(sec);
+      }
+
+      card.appendChild(body);
+    } catch (err) {
+      card.textContent = typeof e === 'string' ? e : JSON.stringify(e);
+    }
+    box.appendChild(card);
+  });
+  if (nearBottom) box.scrollTop = box.scrollHeight;
+}
+
 function connectSse() {
   const source = new EventSource("/stream");
   const handle = (evt) => {
@@ -400,6 +471,12 @@ function connectSse() {
     toLines("simulatorLog", payload.simulator_log || []);
     toLines("kernelLog", payload.kernel_log || []);
     toLines("eventTail", payload.event_tail || [], classifyEventLine);
+    // Render agent decision events if present
+    try {
+      renderAgentLog(payload.agent_log || []);
+    } catch (e) {
+      // ignore render errors
+    }
   };
 
   source.addEventListener("state", handle);

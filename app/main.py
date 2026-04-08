@@ -230,6 +230,7 @@ async def stream() -> EventSourceResponse:
                 "simulator_log": list(state.simulator_log)[-30:],
                 "kernel_log": list(state.kernel_log)[-30:],
                 "adaptation_log": list(state.adaptation_log)[-20:],
+                "agent_log": list(state.agent_log)[-30:],
                 "event_tail": events[-20:],
                 "system_status": state.system_status,
                 "engine_meta": {"last_trigger": state.last_trigger, "last_status": state.last_status, "cycles": state.cycles, "max_cycles": parse_max_cycles()},

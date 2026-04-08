@@ -194,6 +194,19 @@ class AdaptationLoop:
             )
         except Exception:
             logger.exception("[adaptation] exception calling LLM for reasoning")
+            # Emit agent event for the failed LLM invocation
+            try:
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "reasoning",
+                    "schema": "AdaptationDecision",
+                    "system_prompt": SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "error": "exception calling LLM for reasoning",
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
             state.status = "failed"
             return state
 
@@ -207,6 +220,25 @@ class AdaptationLoop:
             logger.debug("[adaptation] decision model_dump: %s", decision.model_dump())
         except Exception:
             logger.debug("[adaptation] decision repr: %s", repr(decision))
+
+        # Log the agent interaction (prompt + structured response)
+        try:
+            resp = None
+            try:
+                resp = decision.model_dump(exclude_none=True)
+            except Exception:
+                resp = repr(decision)
+            payload = {
+                "ts": int(time.time() * 1000),
+                "stage": "reasoning",
+                "schema": "AdaptationDecision",
+                "system_prompt": SYSTEM_PROMPT,
+                "prompt": prompt,
+                "response": resp,
+            }
+            logger.info("[adaptation][agent] %s", json.dumps(payload))
+        except Exception:
+            pass
 
         state.decision          = decision
         state.proposed_theta    = None
@@ -243,6 +275,18 @@ class AdaptationLoop:
             )
         except Exception:
             logger.exception("[adaptation] exception calling LLM for policy vector")
+            try:
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "propose_theta",
+                    "schema": "PolicyPatchSchema",
+                    "system_prompt": THETA_SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "error": "exception calling LLM for policy vector",
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
             state.status = "failed"
             return state
 
@@ -259,6 +303,25 @@ class AdaptationLoop:
             merged_theta = self._merge_theta_patch(state.context.current_theta, theta_patch)
             logger.debug("[adaptation] merged_theta snapshot: %s", {k: merged_theta.get(k) for k in list(merged_theta)[:10]})
             state.proposed_theta = PolicyVectorSchema(**merged_theta)
+            # emit agent event with prompt + response
+            try:
+                resp = None
+                try:
+                    resp = theta_patch.model_dump(exclude_none=True)
+                except Exception:
+                    resp = repr(theta_patch)
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "propose_theta",
+                    "schema": "PolicyPatchSchema",
+                    "system_prompt": THETA_SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "response": resp,
+                    "proposal_id": state.proposal_id,
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
         except Exception as e:
             logger.exception(f"[adaptation] policy vector invalid after merge — {e}")
             state.status = "failed"
@@ -424,6 +487,18 @@ class AdaptationLoop:
             )
         except Exception:
             logger.exception("[adaptation] exception calling LLM for correction")
+            try:
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "correction",
+                    "schema": "PolicyPatchSchema",
+                    "system_prompt": CORRECTION_SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "error": "exception calling LLM for correction",
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
             state.status = "failed"
             return state
 
@@ -448,6 +523,25 @@ class AdaptationLoop:
 
         state.proposed_theta    = corrected_theta
         state.correction_count += 1
+
+        # emit agent event for correction response
+        try:
+            try:
+                resp = corrected_patch.model_dump(exclude_none=True)
+            except Exception:
+                resp = repr(corrected_patch)
+            payload = {
+                "ts": int(time.time() * 1000),
+                "stage": "correction",
+                "schema": "PolicyPatchSchema",
+                "system_prompt": CORRECTION_SYSTEM_PROMPT,
+                "prompt": prompt,
+                "response": resp,
+                "proposal_id": state.proposal_id,
+            }
+            logger.info("[adaptation][agent] %s", json.dumps(payload))
+        except Exception:
+            pass
 
         # Re-verify correction with same async guard & fast-mode as _verify_invariants
         logger.info("[adaptation] re-verifying corrected proposal (proposal_id=%s)", state.proposal_id)

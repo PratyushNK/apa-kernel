@@ -36,6 +36,7 @@ class RuntimeState:
     simulator_log: deque[str] = field(default_factory=lambda: deque(maxlen=50))
     kernel_log: deque[str] = field(default_factory=lambda: deque(maxlen=50))
     adaptation_log: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=30))
+    agent_log: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=100))
     stream_events_cache: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=4000))
     heartbeat_task: asyncio.Task[None] | None = None
     sim_reader_task: asyncio.Task[None] | None = None
@@ -176,6 +177,25 @@ async def capture_process_output(proc: asyncio.subprocess.Process, buffer: deque
             break
         text = line.decode(errors="replace").rstrip()
         buffer.append(text)
+        # Detect structured agent events emitted by the kernel process.
+        # Kernel logs a single-line JSON payload prefixed with the marker
+        # "[adaptation][agent]" so we can parse and surface it to the UI.
+        if "[adaptation][agent]" in text:
+            try:
+                idx = text.index("[adaptation][agent]")
+                raw = text[idx + len("[adaptation][agent]"):].strip()
+                parsed = json.loads(raw)
+                state.agent_log.append(parsed)
+            except Exception:
+                # best-effort fallback: try to extract JSON object from the line
+                import re as _re_json
+                m = _re_json.search(r"(\{.*\})", text)
+                if m:
+                    try:
+                        parsed = json.loads(m.group(1))
+                        state.agent_log.append(parsed)
+                    except Exception:
+                        pass
         if "[adaptation]" in text:
             adaptation_logger.info(text)
             lower = text.lower()

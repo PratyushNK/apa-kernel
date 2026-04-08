@@ -24,6 +24,7 @@ html, body {
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 500;
+  overflow-x: hidden;
 }
 .bg-grid {
   position: fixed;
@@ -33,7 +34,7 @@ html, body {
   background-size: 28px 28px;
   mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
 }
-.app-shell { position: relative; max-width: 1400px; margin: 0 auto; padding: 18px; display: grid; gap: 14px; }
+.app-shell { position: relative; width: 100%; max-width: 100%; margin: 0 auto; padding: 18px; display: grid; gap: 14px; }
 .panel { background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(247,250,252,0.99)); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; backdrop-filter: blur(2px); box-shadow: 0 6px 20px var(--panel-shadow); }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 h1, h2, h3 { margin: 0; font-weight: 600; }
@@ -57,6 +58,8 @@ h3 { font-size: 0.74rem; color: var(--muted); text-transform: uppercase; letter-
 .metric-warn { color: var(--warn); }
 .metric-bad { color: var(--bad); }
 .split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.policy-split { grid-template-columns: 420px 1fr; }
+.panel-stack { display: flex; flex-direction: column; gap: 12px; }
 .gateway-pills, .gateway-controls, .engine-meta { display: grid; gap: 8px; }
 .gateway-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 8px; }
 .regime.healthy, .engine.monitoring { color: var(--good); }
@@ -81,6 +84,28 @@ h3 { font-size: 0.74rem; color: var(--muted); text-transform: uppercase; letter-
 .log-entry.reasoning { color: var(--reasoning); }
 .log-entry.deployed { color: var(--deployed); }
 .log-entry.recovery { color: var(--recovery); }
+.agent-entry { border-left: 3px solid rgba(37,99,235,0.08); margin-bottom: 10px; background: rgba(255,255,255,0.6); border-radius: 8px; padding: 10px; }
+.agent-header { display:flex; gap:8px; align-items:baseline; margin-bottom:6px; }
+.agent-badge { background: rgba(37,99,235,0.08); color: var(--accent); padding: 4px 8px; border-radius: 999px; font-weight:700; font-size:0.75rem; }
+.agent-meta { color: var(--muted); font-size: 0.78rem; margin-left: 6px; }
+.agent-summary { margin-bottom: 8px; color: var(--muted); }
+.agent-details { margin-top: 6px; }
+.agent-section { margin-bottom: 8px; }
+.agent-section pre { background: rgba(0,0,0,0.02); padding: 8px; border-radius:6px; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; }
+
+/* Ensure generic pre tags also wrap to avoid creating horizontal overflow */
+pre { white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; }
+
+/* Prevent panels and log boxes from exceeding container width */
+.panel, .log-box { max-width: 100%; box-sizing: border-box; }
+
+/* Ensure the main app container clips any accidental overflow */
+.app-shell { overflow-x: hidden; }
+.agent-table { width:100%; border-collapse: collapse; font-family: inherit; }
+.agent-table td { padding:6px 8px; border-bottom: 1px dashed rgba(0,0,0,0.04); vertical-align: top; }
+.agent-table-key { width:28%; color:var(--muted); font-weight:600; }
+.agent-table-val { white-space: pre-wrap; }
+.agent-error { color: var(--danger); }
 .event-route { color: var(--accent); }
 .event-success { color: var(--good); }
 .event-failed { color: var(--bad); }
