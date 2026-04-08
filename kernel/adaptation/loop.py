@@ -692,9 +692,17 @@ class AdaptationLoop:
         # After the initial pause, prefer a snapshot that reflects post-deploy
         # traffic. Poll the aggregator until we observe a snapshot whose
         # `window_end_ms` is after the recorded deployment time and which has
-        # sufficient data, up to a reasonable deadline.
-        poll_deadline = time.time() + OBSERVE_WAIT_S + 10.0
+        # sufficient data, up to a reasonable deadline. To reduce false
+        # negatives from transient noise, require N consecutive good
+        # post-deploy snapshots (configurable via `RECOVERY_CONSECUTIVE_GOOD`).
+        try:
+            consecutive_required = int(os.getenv("RECOVERY_CONSECUTIVE_GOOD", "2"))
+        except Exception:
+            consecutive_required = 2
+
+        poll_deadline = time.time() + OBSERVE_WAIT_S + 10.0 + (consecutive_required * OBSERVE_WAIT_S)
         snapshot, _ = self._aggregator.get_snapshot()
+
         # Helper to check snapshot freshness and sufficiency
         def _is_post_deploy(snap: Optional[object]) -> bool:
             if snap is None:
@@ -708,15 +716,20 @@ class AdaptationLoop:
             # if we have a recorded deploy time, ensure snapshot covers later events
             if getattr(state, "deployed_at_ms", None):
                 try:
-                    return getattr(snap, "window_end_ms", 0) >= int(state.deployed_at_ms)
+                    # Prefer windows that start after deployment so the
+                    # snapshot only contains post-deploy traffic. Using
+                    # `window_start_ms` avoids contamination from earlier
+                    # pre-deploy requests in sliding windows.
+                    return getattr(snap, "window_start_ms", 0) >= int(state.deployed_at_ms)
                 except Exception:
                     return False
             return True
 
-        # Poll until we find a post-deploy, sufficient snapshot or until deadline
+        # First, wait until we see any post-deploy, sufficient snapshot (or timeout)
         while not _is_post_deploy(snapshot) and time.time() < poll_deadline:
             await asyncio.sleep(1.0)
             snapshot, _ = self._aggregator.get_snapshot()
+
         state.cycle_count += 1
 
         if snapshot is None:
@@ -754,9 +767,41 @@ class AdaptationLoop:
             except Exception:
                 min_approval = HealthThresholds.min_approval_rate
 
-            recovery_confirmed = (not snapshot.invariant_risk.any_breach) and (
-                (not require_approval) or (snapshot.approval_rate >= min_approval)
-            )
+            # Require consecutive successful post-deploy snapshots to avoid
+            # transient misclassification. Only count snapshots that are
+            # post-deploy and have sufficient data.
+            try:
+                consecutive_required = int(os.getenv("RECOVERY_CONSECUTIVE_GOOD", "2"))
+            except Exception:
+                consecutive_required = 2
+
+            consecutive_ok = 0
+            # Allow a short additional window to collect consecutive snapshots
+            consecutive_deadline = time.time() + (consecutive_required * OBSERVE_WAIT_S) + 5.0
+            # Evaluate successive snapshots until we either reach the required
+            # consecutive count or exhaust the deadline.
+            while time.time() < consecutive_deadline and consecutive_ok < consecutive_required:
+                # Only evaluate snapshots that cover post-deploy traffic
+                if _is_post_deploy(snapshot):
+                    try:
+                        snapshot_ok = (not snapshot.invariant_risk.any_breach) and (
+                            (not require_approval) or (snapshot.approval_rate >= min_approval)
+                        )
+                    except Exception:
+                        snapshot_ok = False
+
+                    if snapshot_ok:
+                        consecutive_ok += 1
+                    else:
+                        consecutive_ok = 0
+
+                if consecutive_ok >= consecutive_required:
+                    break
+
+                await asyncio.sleep(1.0)
+                snapshot, _ = self._aggregator.get_snapshot()
+
+            recovery_confirmed = consecutive_ok >= consecutive_required
 
             _emit_adaptation_record(
                 "observed",
