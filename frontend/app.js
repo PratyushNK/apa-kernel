@@ -39,6 +39,32 @@ let tick = 0;
 const TAIL_WINDOW = 30;
 let previousMetrics = {};
 let previousPolicy = {};
+// Read theme colors from CSS variables so JS follows the current theme.
+function hexToRgba(hex, alpha) {
+  if (!hex) return `rgba(0,0,0,${alpha})`;
+  let h = String(hex).trim();
+  if (h.startsWith("var(")) {
+    const name = h.slice(4, -1).trim();
+    h = getComputedStyle(document.documentElement).getPropertyValue(name) || h;
+  }
+  h = h.replace(/^#/, "");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const num = parseInt(h, 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+const __css = window.getComputedStyle(document.documentElement);
+const COLORS = {
+  good: (__css.getPropertyValue("--good") || "#059669").trim(),
+  warn: (__css.getPropertyValue("--warn") || "#d97706").trim(),
+  bad: (__css.getPropertyValue("--bad") || "#dc2626").trim(),
+  muted: (__css.getPropertyValue("--muted") || "#6b7280").trim(),
+  text: (__css.getPropertyValue("--text") || "#0f172a").trim(),
+  accent: (__css.getPropertyValue("--accent") || "#0ea5ff").trim(),
+  border: (__css.getPropertyValue("--border") || "#e6edf3").trim(),
+};
 const outageMarkerPlugin = {
   id: "outageMarkerPlugin",
   afterDraw(chartInstance) {
@@ -47,7 +73,7 @@ const outageMarkerPlugin = {
     ctx.save();
     chartState.outageMarkers.forEach((xVal) => {
       const x = scales.x.getPixelForValue(xVal);
-      ctx.strokeStyle = "rgba(239,68,68,0.8)";
+      ctx.strokeStyle = hexToRgba(COLORS.bad, 0.8);
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, chartArea.top);
@@ -88,14 +114,26 @@ function setHtml(id, text, className) {
 function toLines(containerId, lines, classifier) {
   const box = document.getElementById(containerId);
   if (!box) return;
-  box.innerHTML = "";
+  // Only auto-scroll when the user is near the bottom; otherwise preserve
+  // their manual scroll position so they can inspect past entries.
+  const nearBottom = (box.scrollHeight - box.clientHeight - box.scrollTop) < 50;
+  const frag = document.createDocumentFragment();
   lines.forEach((line) => {
     const div = document.createElement("div");
     div.className = "log-entry" + (classifier ? ` ${classifier(line)}` : "");
-    div.textContent = typeof line === "string" ? line : JSON.stringify(line);
-    box.appendChild(div);
+    // Prefer a pre-rendered `line` property when present (avoid dumping whole objects)
+    let text;
+    if (typeof line === "string") text = line;
+    else if (line && typeof line === 'object' && 'line' in line) text = line.line;
+    else if (line && typeof line === 'object') text = JSON.stringify(line);
+    else text = String(line);
+    div.textContent = text;
+    frag.appendChild(div);
   });
-  box.scrollTop = box.scrollHeight;
+  // Replace content in one operation for fewer reflows
+  box.innerHTML = "";
+  box.appendChild(frag);
+  if (nearBottom) box.scrollTop = box.scrollHeight;
 }
 
 function updateStatusPill(status) {
@@ -139,9 +177,15 @@ function updateEngine(payload) {
   const tlc = payload.tlc || {};
   const tlcEl = document.getElementById("tlcStatus");
   if (tlcEl) {
-    const s = tlc.status ? String(tlc.status).toUpperCase() : "-";
-    tlcEl.textContent = s;
-    tlcEl.className = 'mono' + (s === "PASSED" ? ' tlc-passed' : s === "FAILED" ? ' tlc-failed' : '');
+    // Prefer explicit tlc.result if available; otherwise fall back to status
+    const result = tlc.result ? String(tlc.result).toUpperCase() : (tlc.status ? String(tlc.status).toUpperCase() : "-");
+    const ran = !!tlc.ran;
+    let label = result;
+    if (result === "-" && ran) label = "RAN";
+    // If verification_status is present and differs, append indicator
+    const ver = tlc.verification_status ? String(tlc.verification_status).toUpperCase() : null;
+    tlcEl.textContent = ver && ver !== label ? `${label} (${ver})` : label;
+    tlcEl.className = 'mono' + (result === "PASSED" || ver === "PASSED" ? ' tlc-passed' : result === "FAILED" || ver === "FAILED" ? ' tlc-failed' : '');
   }
   // optionally show violations in adaptation log for visibility
   if (Array.isArray(tlc.violations) && tlc.violations.length > 0) {
@@ -233,7 +277,7 @@ function updateMetrics(payload) {
   });
 
   const lineColorClass = gradeMetric("approval_rate", Number(metrics.approval_rate ?? 0));
-  const lineColor = lineColorClass === "metric-good" ? "#10b981" : lineColorClass === "metric-warn" ? "#f59e0b" : "#ef4444";
+  const lineColor = lineColorClass === "metric-good" ? COLORS.good : lineColorClass === "metric-warn" ? COLORS.warn : COLORS.bad;
   updateChart(Number(metrics.approval_rate ?? 0), lineColor);
 }
 
@@ -243,7 +287,11 @@ async function post(url) {
 }
 
 function attachControls() {
-  document.getElementById("startBtn").addEventListener("click", async () => post("/start"));
+  document.getElementById("startBtn").addEventListener("click", async () => {
+    // Clear Agent Decisions UI immediately for a fresh run
+    try { const box = document.getElementById('agentLog'); if (box) box.innerHTML = ''; } catch (e) {}
+    await post("/start");
+  });
   document.getElementById("stopBtn").addEventListener("click", async () => {
     try {
       await post("/stop");
@@ -260,6 +308,8 @@ function attachControls() {
       toLines("kernelLog", []);
       toLines("eventTail", []);
       toLines("adaptationLog", []);
+      // clear agent decisions panel as well when stopping
+      try { renderAgentLog([]); } catch (e) {}
       // clear chart data and outage markers
       chartState.points = [];
       chartState.outageMarkers = [];
@@ -311,20 +361,20 @@ function initChart() {
           type: "linear",
           min: 0,
           max: 1,
-          ticks: { color: "#9aa7b7" },
-          grid: { color: "rgba(154,167,183,0.15)" },
+          ticks: { color: COLORS.muted },
+          grid: { color: hexToRgba(COLORS.muted, 0.15) },
         },
         x: {
           type: "linear",
           min: 1,
           max: TAIL_WINDOW,
-          title: { display: true, text: "Time (ticks)", color: "#9aa7b7" },
-          ticks: { color: "#9aa7b7", maxTicksLimit: 6, stepSize: 5 },
-          grid: { color: "rgba(154,167,183,0.08)" },
+          title: { display: true, text: "Time (ticks)", color: COLORS.muted },
+          ticks: { color: COLORS.muted, maxTicksLimit: 6, stepSize: 5 },
+          grid: { color: hexToRgba(COLORS.muted, 0.08) },
         },
       },
       plugins: {
-        legend: { labels: { color: "#d5dde7" } },
+        legend: { labels: { color: COLORS.text } },
       },
     },
   });
@@ -337,6 +387,65 @@ function classifyEventLine(line) {
   if (line.event_type === "AttemptResult" && line.status === "TIMEOUT") return "event-timeout";
   if (line.event_type === "AttemptResult") return "event-failed";
   return "";
+}
+
+function renderAgentLog(entries) {
+  const box = document.getElementById('agentLog');
+  if (!box) return;
+  // Preserve user scroll unless they're near the bottom
+  const nearBottom = (box.scrollHeight - box.clientHeight - box.scrollTop) < 80;
+  box.innerHTML = '';
+  entries.forEach((e) => {
+    const card = document.createElement('div');
+    card.className = 'log-entry agent-entry';
+    try {
+      const ts = e && e.ts ? new Date(e.ts).toLocaleTimeString() : new Date().toLocaleTimeString();
+      const header = document.createElement('div');
+      header.className = 'agent-header';
+      const badge = document.createElement('div');
+      badge.className = 'agent-badge';
+      badge.textContent = (e && e.stage) ? e.stage.toUpperCase() : 'AGENT';
+      const title = document.createElement('div');
+      title.className = 'agent-meta';
+      title.textContent = `[${ts}] ${e && (e.schema || '')} ${e && e.proposal_id ? '(proposal=' + e.proposal_id + ')' : ''}`;
+      header.appendChild(badge);
+      header.appendChild(title);
+      card.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'agent-body';
+
+      if (e && e.system_prompt) {
+        const sec = document.createElement('div'); sec.className = 'agent-section';
+        const label = document.createElement('div'); label.textContent = 'SYSTEM'; label.className = 'agent-table-key';
+        const pre = document.createElement('pre'); pre.textContent = e.system_prompt;
+        sec.appendChild(label); sec.appendChild(pre); body.appendChild(sec);
+      }
+      if (e && e.prompt) {
+        const sec = document.createElement('div'); sec.className = 'agent-section';
+        const label = document.createElement('div'); label.textContent = 'PROMPT'; label.className = 'agent-table-key';
+        const pre = document.createElement('pre'); pre.textContent = e.prompt;
+        sec.appendChild(label); sec.appendChild(pre); body.appendChild(sec);
+      }
+      if (e && e.response) {
+        const sec = document.createElement('div'); sec.className = 'agent-section';
+        const label = document.createElement('div'); label.textContent = 'RESPONSE'; label.className = 'agent-table-key';
+        const pre = document.createElement('pre'); pre.textContent = typeof e.response === 'string' ? e.response : JSON.stringify(e.response, null, 2);
+        sec.appendChild(label); sec.appendChild(pre); body.appendChild(sec);
+      }
+      if (e && e.error) {
+        const sec = document.createElement('div'); sec.className = 'agent-section agent-error';
+        sec.textContent = 'ERROR: ' + e.error;
+        body.appendChild(sec);
+      }
+
+      card.appendChild(body);
+    } catch (err) {
+      card.textContent = typeof e === 'string' ? e : JSON.stringify(e);
+    }
+    box.appendChild(card);
+  });
+  if (nearBottom) box.scrollTop = box.scrollHeight;
 }
 
 function connectSse() {
@@ -368,6 +477,12 @@ function connectSse() {
     toLines("simulatorLog", payload.simulator_log || []);
     toLines("kernelLog", payload.kernel_log || []);
     toLines("eventTail", payload.event_tail || [], classifyEventLine);
+    // Render agent decision events if present
+    try {
+      renderAgentLog(payload.agent_log || []);
+    } catch (e) {
+      // ignore render errors
+    }
   };
 
   source.addEventListener("state", handle);

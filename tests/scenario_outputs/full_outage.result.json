@@ -1,0 +1,12 @@
+{
+  "scenario": "Full Outage",
+  "disturbance": "full_outage",
+  "injection_index": 270,
+  "injection_ts_ms": 1775490508779,
+  "breach_ts_ms": 1775490517643,
+  "time_to_breach_ms": 8864,
+  "adaptation_cycles": null,
+  "recovered_confirmed": false,
+  "approval_before": 0.8846153846153846,
+  "approval_after": 0.6923076923076923
+}

@@ -6,6 +6,7 @@ Wires all components and runs the simulation.
 import argparse
 import os
 import asyncio
+from typing import Optional
 
 from arrival_process import ArrivalProcess, ArrivalConfig, BurstConfig
 from transaction_engine import TransactionEngine
@@ -34,10 +35,76 @@ aggregator = Aggregator(
     thresholds           = HealthThresholds(),
 )
 
-async def simulation_runner(debug_eval_ms: int | None = None):
+
+# Helper: append a simple disturbance marker to the event log (wall-clock ms)
+def _append_event_log(path: pathlib.Path, record: dict) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, default=str) + "\n")
+    except Exception:
+        pass
+
+
+def make_inject_disturbance(gateway_model, disturbance_type: Optional[str], events_path: pathlib.Path):
+    """Return an async injector function that applies the named disturbance.
+
+    The injector writes a Disturbance marker to the events log with wall-clock
+    timestamp (ms) so external harnesses can correlate injection -> breach.
+    """
+    async def _injector():
+        if not disturbance_type:
+            return
+        # allow baseline to establish
+        await asyncio.sleep(3.5)
+        ts_ms = int(time.time() * 1000)
+        dt = disturbance_type or ""
+        try:
+            if dt == "healthy_baseline":
+                # no-op
+                pass
+            elif dt == "gateway_degradation":
+                gateway_model.force_regime("G1", Regime.DEGRADED)
+            elif dt == "full_outage":
+                gateway_model.force_regime("G1", Regime.OUTAGE)
+            elif dt == "circuit_breaker_trigger":
+                gateway_model.force_regime("G1", Regime.OUTAGE)
+                await asyncio.sleep(5.0)
+                gateway_model.force_regime("G1", Regime.HEALTHY)
+            elif dt == "retry_amplification":
+                gateway_model.force_regime("G1", Regime.DEGRADED)
+            elif dt == "sla_breach":
+                # try to increase latency profile for G1 (best-effort)
+                try:
+                    gateway_model._configs["G1"].latency_mu[Regime.HEALTHY] = 8.0
+                except Exception:
+                    pass
+            elif dt == "burst_traffic":
+                gateway_model.force_regime("G1", Regime.DEGRADED)
+            elif dt == "everything_breaks":
+                gateway_model.force_regime("G1", Regime.OUTAGE)
+                gateway_model.force_regime("G2", Regime.OUTAGE)
+        except Exception:
+            pass
+
+        # Write a disturbance marker with wall-clock ms timestamp
+        rec = {"event_type": "Disturbance", "disturbance": dt, "ts": ts_ms}
+        _append_event_log(events_path, rec)
+        print(f"\n[disturbance] applied {dt} at {ts_ms}ms\n")
+
+    return _injector
+
+async def simulation_runner(debug_eval_ms: Optional[int] = None, disturbance_type: Optional[str] = None):
     events_path = STREAMS / "events.jsonl"
     if events_path.exists():
         events_path.unlink()
+
+    # Reset module-level aggregator internal metrics between runs so that
+    # repeated runs in the same process don't inherit previous state.
+    try:
+        aggregator.reset()
+    except Exception:
+        pass
 
     # --- Gateway setup ---
     # Allow a short debug eval window via CLI flag or env var for rapid testing.
@@ -82,7 +149,9 @@ async def simulation_runner(debug_eval_ms: int | None = None):
     config = SimulatorConfig(
         max_transactions  = 1200,
         speed_multiplier  = 1,    # 10x faster than real time
-        clock_start_ms    = 0,
+        # start simulated clock at current wall-clock epoch ms to produce
+        # epoch-ms timestamps in emitted events (avoids fragile postprocessing)
+        clock_start_ms    = int(time.time() * 1000),
         real_tick_delay_s = 0.05
     )
 
@@ -108,10 +177,8 @@ async def simulation_runner(debug_eval_ms: int | None = None):
             seen = len(tail)
             await asyncio.sleep(0.1)
 
-    async def inject_disturbance():
-        await asyncio.sleep(3.5)   # let healthy baseline establish
-        gateway_model.force_regime("G1", Regime.OUTAGE)
-        print("\n------------------------------\n[disturbance] G1 forced to OUTAGE\n------------------------------\n")
+    # Build injector task from disturbance_type (no-op when None/healthy)
+    injector = make_inject_disturbance(gateway_model, disturbance_type, STREAMS / "events.jsonl")
 
     async def gateway_watcher():
         """Watch data/gateway_commands.json for external commands and apply them.
@@ -183,13 +250,16 @@ async def simulation_runner(debug_eval_ms: int | None = None):
         aggregator.stop()
 
     try:
-        await asyncio.gather(
-            run_simulation(),
-            aggregator.run_heartbeat(),
-            inject_disturbance(),
-            gateway_watcher(),
-            # print_tail()
-        )
+        tasks = [
+            asyncio.create_task(run_simulation()),
+            asyncio.create_task(aggregator.run_heartbeat()),
+            asyncio.create_task(gateway_watcher()),
+        ]
+        # only schedule injector when a disturbance is requested
+        if disturbance_type:
+            tasks.append(asyncio.create_task(injector()))
+
+        await asyncio.gather(*tasks)
     except asyncio.CancelledError:
         pass
     finally:
@@ -198,7 +268,7 @@ async def simulation_runner(debug_eval_ms: int | None = None):
         print("[runner] done.")
 
 
-async def main(debug_eval_ms: int | None = None):
+async def main(debug_eval_ms: Optional[int] = None):
     await simulation_runner(debug_eval_ms=debug_eval_ms)
 
 

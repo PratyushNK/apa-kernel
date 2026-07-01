@@ -58,6 +58,8 @@ class PolicyVectorSchema(BaseModel):
     backoff_multiplier     : float            = Field(ge=1.0, le=5.0, description="Exponential backoff multiplier 1.0-5.0")
     retry_budget_window_ms : int              = Field(ge=1000, description="Retry budget window in ms")
     max_retries_per_window : int              = Field(ge=1, description="Max retries allowed per window")
+    # P6 — optional per-provider timeout thresholds (ms)
+    timeout_ms             : dict[str, int]  = Field(default_factory=dict, description="Per-provider timeout thresholds in ms")
 
 
 class PolicyPatchSchema(BaseModel):
@@ -77,6 +79,7 @@ class PolicyPatchSchema(BaseModel):
     backoff_multiplier     : Optional[float]            = Field(default=None, ge=1.0, le=5.0)
     retry_budget_window_ms : Optional[int]              = Field(default=None, ge=1000)
     max_retries_per_window : Optional[int]              = Field(default=None, ge=1)
+    timeout_ms             : Optional[dict[str, int]]  = Field(default=None)
 
 
 class AdaptationDecision(BaseModel):
@@ -119,6 +122,13 @@ class AdaptationState(BaseModel):
     objective           : str = "cure"
     # Persistent id for the currently proposed policy vector (if any)
     proposal_id         : Optional[str] = None
+
+    # Prior policy theta snapshot (used for rollback/canary)
+    prior_theta         : Optional[dict] = None
+
+    # Timestamp (ms) when the current proposal was deployed. Used to
+    # ensure observation windows reflect post-deploy traffic only.
+    deployed_at_ms      : Optional[int] = None
 
     # Terminal status
     status              : str = "running"  # running | success | failed | max_cycles

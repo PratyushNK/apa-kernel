@@ -1,0 +1,12 @@
+{
+  "scenario": "Burst Traffic",
+  "disturbance": "burst_traffic",
+  "injection_index": 270,
+  "injection_ts_ms": 1775490709257,
+  "breach_ts_ms": 1775490719633,
+  "time_to_breach_ms": 10376,
+  "adaptation_cycles": null,
+  "recovered_confirmed": false,
+  "approval_before": 0.8518518518518519,
+  "approval_after": 0.9615384615384616
+}

@@ -1,0 +1,12 @@
+{
+  "scenario": "Gateway Degradation",
+  "disturbance": "gateway_degradation",
+  "injection_index": 270,
+  "injection_ts_ms": 1775490459028,
+  "breach_ts_ms": null,
+  "time_to_breach_ms": null,
+  "adaptation_cycles": null,
+  "recovered_confirmed": false,
+  "approval_before": 0.9230769230769231,
+  "approval_after": 0.8518518518518519
+}

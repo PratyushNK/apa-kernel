@@ -448,7 +448,8 @@ def test_demo_performance_driver():
             "base_backoff_ms": 100,
             "backoff_multiplier": 2.0,
             "retry_budget_window_ms": 60000,
-            "max_retries_per_window": 200
+            "max_retries_per_window": 200,
+            "timeout_ms": {"G1": 300, "G2": 300}
         }, indent=2)
 
     if gateway_path.exists():

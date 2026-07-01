@@ -63,9 +63,10 @@ def test_tlcconfig_generate_writes_files(tmp_path):
 
     cfg = verify.TLCConfig(tmp_path)
     params = verify.PolicyParams.base()
-    tla_path, cfg_path = cfg.generate("unittest", params)
+        tla_path, cfg_path, cfg_fair = cfg.generate("unittest", params)
     assert tla_path.exists()
     assert cfg_path.exists()
+        assert cfg_fair.exists()
     content = tla_path.read_text()
     assert f"MaxRetry            == {params.max_retry}" in content
 

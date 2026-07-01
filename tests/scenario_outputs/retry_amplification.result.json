@@ -1,0 +1,12 @@
+{
+  "scenario": "Retry Amplification",
+  "disturbance": "retry_amplification",
+  "injection_index": 270,
+  "injection_ts_ms": 1775490609680,
+  "breach_ts_ms": 1775490617127,
+  "time_to_breach_ms": 7447,
+  "adaptation_cycles": 1,
+  "recovered_confirmed": true,
+  "approval_before": 0.8076923076923077,
+  "approval_after": 0.9629629629629629
+}

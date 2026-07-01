@@ -29,6 +29,8 @@ import pathlib
 import json
 import time
 import uuid
+import os
+from typing import Optional
 
 from interfaces.llm import LLM
 from kernel.adaptation.schemas import (
@@ -47,7 +49,7 @@ from kernel.adaptation.prompt_builder import (
     build_theta_prompt,
     build_correction_prompt,
 )
-from kernel.aggregator.aggregator import Aggregator
+from kernel.aggregator.aggregator import Aggregator, HealthThresholds
 from kernel.verification.verifier import InvariantVerifier
 from simulator.policy_engine import PolicyStore, PolicyVector
 
@@ -58,11 +60,12 @@ ROOT = pathlib.Path(__file__).parent.parent.parent
 ADAPTATIONS_PATH = ROOT / "data" / "streams" / "adaptations.jsonl"
 
 
-def _emit_adaptation_record(stage: str, proposal_id: str | None, payload: dict) -> None:
+def _emit_adaptation_record(stage: str, proposal_id: Optional[str], payload: dict) -> None:
     try:
         ADAPTATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
         rec = {
-            "ts": time.time(),
+            # emit epoch milliseconds for consistency with events.jsonl
+            "ts": int(time.time() * 1000),
             "stage": stage,
             "proposal_id": proposal_id,
         }
@@ -107,6 +110,8 @@ class AdaptationLoop:
         state   = AdaptationState(context=context, objective=objective)
 
         while state.status == "running":
+            # reset correction attempts per cycle (allow MAX_CORRECTIONS per cycle)
+            state.correction_count = 0
             state = await self._fetch_metrics(state)
             state = await self._reason_and_propose(state)
             if state.status != "running":
@@ -189,6 +194,19 @@ class AdaptationLoop:
             )
         except Exception:
             logger.exception("[adaptation] exception calling LLM for reasoning")
+            # Emit agent event for the failed LLM invocation
+            try:
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "reasoning",
+                    "schema": "AdaptationDecision",
+                    "system_prompt": SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "error": "exception calling LLM for reasoning",
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
             state.status = "failed"
             return state
 
@@ -202,6 +220,25 @@ class AdaptationLoop:
             logger.debug("[adaptation] decision model_dump: %s", decision.model_dump())
         except Exception:
             logger.debug("[adaptation] decision repr: %s", repr(decision))
+
+        # Log the agent interaction (prompt + structured response)
+        try:
+            resp = None
+            try:
+                resp = decision.model_dump(exclude_none=True)
+            except Exception:
+                resp = repr(decision)
+            payload = {
+                "ts": int(time.time() * 1000),
+                "stage": "reasoning",
+                "schema": "AdaptationDecision",
+                "system_prompt": SYSTEM_PROMPT,
+                "prompt": prompt,
+                "response": resp,
+            }
+            logger.info("[adaptation][agent] %s", json.dumps(payload))
+        except Exception:
+            pass
 
         state.decision          = decision
         state.proposed_theta    = None
@@ -238,6 +275,18 @@ class AdaptationLoop:
             )
         except Exception:
             logger.exception("[adaptation] exception calling LLM for policy vector")
+            try:
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "propose_theta",
+                    "schema": "PolicyPatchSchema",
+                    "system_prompt": THETA_SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "error": "exception calling LLM for policy vector",
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
             state.status = "failed"
             return state
 
@@ -254,6 +303,25 @@ class AdaptationLoop:
             merged_theta = self._merge_theta_patch(state.context.current_theta, theta_patch)
             logger.debug("[adaptation] merged_theta snapshot: %s", {k: merged_theta.get(k) for k in list(merged_theta)[:10]})
             state.proposed_theta = PolicyVectorSchema(**merged_theta)
+            # emit agent event with prompt + response
+            try:
+                resp = None
+                try:
+                    resp = theta_patch.model_dump(exclude_none=True)
+                except Exception:
+                    resp = repr(theta_patch)
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "propose_theta",
+                    "schema": "PolicyPatchSchema",
+                    "system_prompt": THETA_SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "response": resp,
+                    "proposal_id": state.proposal_id,
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
         except Exception as e:
             logger.exception(f"[adaptation] policy vector invalid after merge — {e}")
             state.status = "failed"
@@ -308,7 +376,55 @@ class AdaptationLoop:
         except Exception:
             logger.debug("[adaptation] could not dump proposed_theta")
 
-        is_valid, violations = self._verifier.check(state.proposed_theta.model_dump())
+        # Run the potentially blocking verifier in a thread to avoid blocking
+        # the asyncio event loop (TLC may run as a subprocess and block).
+        # Compute an async guard timeout (based on the TLC timeout env var)
+        try:
+            tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT_ADAPTATION", "10"))
+        except Exception:
+            tlc_timeout = 10
+        async_timeout = max(15, tlc_timeout + 5)
+
+        # Run verification in executor, request fast-mode from verifier API
+        try:
+            loop = asyncio.get_running_loop()
+            try:
+                is_valid, violations = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        self._verifier.check,
+                        state.proposed_theta.model_dump(),
+                        True,
+                        tlc_timeout,
+                    ),
+                    timeout=async_timeout,
+                )
+            except asyncio.TimeoutError:
+                # Verifier thread hung or exceeded expected time; fall back to fast Python checks
+                logger.warning("[adaptation] verification timed out after %ss; using fast Python checks", async_timeout)
+                try:
+                    proposed = dict(state.proposed_theta.model_dump())
+                except Exception:
+                    try:
+                        proposed = dict(state.proposed_theta.__dict__)
+                    except Exception:
+                        proposed = {}
+                violations = []
+                try:
+                    violations.extend(self._verifier._check_single_settlement(proposed))
+                    violations.extend(self._verifier._check_I2_retry_bound(proposed))
+                    violations.extend(self._verifier._check_provider_weights(proposed))
+                    violations.extend(self._verifier._check_backoff(proposed))
+                    violations.extend(self._verifier._check_retry_budget(proposed))
+                except Exception:
+                    logger.exception("[adaptation] fallback verification failed")
+                is_valid = len(violations) == 0
+            except Exception:
+                # Fall back to synchronous call if executor fails for any other reason
+                is_valid, violations = self._verifier.check(state.proposed_theta.model_dump(), True, tlc_timeout)
+        except Exception:
+            # If event loop not available or other issue, try synchronous check
+            is_valid, violations = self._verifier.check(state.proposed_theta.model_dump(), True, tlc_timeout)
         state.verification_pass = is_valid
         state.violations        = violations
 
@@ -329,8 +445,9 @@ class AdaptationLoop:
             )
         except Exception:
             logger.debug("[adaptation] failed to emit verification record")
-        else:
-            # Distinguish TLC counterexample vs Python fallback violations
+
+        # Only log failures; avoid emitting misleading warnings when verification passed
+        if not state.verification_pass:
             tlc_indicators = ("TLC counterexample", "TLC attempt error", "TLC check failed")
             if any(any(ind in v for ind in tlc_indicators) for v in violations):
                 logger.warning("[adaptation] verification failed (TLC) — %s", violations)
@@ -370,6 +487,18 @@ class AdaptationLoop:
             )
         except Exception:
             logger.exception("[adaptation] exception calling LLM for correction")
+            try:
+                payload = {
+                    "ts": int(time.time() * 1000),
+                    "stage": "correction",
+                    "schema": "PolicyPatchSchema",
+                    "system_prompt": CORRECTION_SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "error": "exception calling LLM for correction",
+                }
+                logger.info("[adaptation][agent] %s", json.dumps(payload))
+            except Exception:
+                pass
             state.status = "failed"
             return state
 
@@ -395,13 +524,84 @@ class AdaptationLoop:
         state.proposed_theta    = corrected_theta
         state.correction_count += 1
 
-        # Re-verify correction
-        is_valid, violations    = self._verifier.check(corrected_theta.model_dump())
+        # emit agent event for correction response
+        try:
+            try:
+                resp = corrected_patch.model_dump(exclude_none=True)
+            except Exception:
+                resp = repr(corrected_patch)
+            payload = {
+                "ts": int(time.time() * 1000),
+                "stage": "correction",
+                "schema": "PolicyPatchSchema",
+                "system_prompt": CORRECTION_SYSTEM_PROMPT,
+                "prompt": prompt,
+                "response": resp,
+                "proposal_id": state.proposal_id,
+            }
+            logger.info("[adaptation][agent] %s", json.dumps(payload))
+        except Exception:
+            pass
+
+        # Re-verify correction with same async guard & fast-mode as _verify_invariants
+        logger.info("[adaptation] re-verifying corrected proposal (proposal_id=%s)", state.proposal_id)
+        try:
+            try:
+                tlc_timeout = int(os.getenv("VERIFIER_TLC_TIMEOUT_ADAPTATION", "10"))
+            except Exception:
+                tlc_timeout = 10
+            async_timeout = max(15, tlc_timeout + 5)
+
+            try:
+                loop = asyncio.get_running_loop()
+                try:
+                    is_valid, violations = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            None,
+                            self._verifier.check,
+                            corrected_theta.model_dump(),
+                            True,
+                            tlc_timeout,
+                        ),
+                        timeout=async_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("[adaptation] correction verification timed out after %ss; using fast Python checks", async_timeout)
+                    try:
+                        proposed = dict(corrected_theta.model_dump())
+                    except Exception:
+                        try:
+                            proposed = dict(corrected_theta.__dict__)
+                        except Exception:
+                            proposed = {}
+                    violations = []
+                    try:
+                        violations.extend(self._verifier._check_single_settlement(proposed))
+                        violations.extend(self._verifier._check_I2_retry_bound(proposed))
+                        violations.extend(self._verifier._check_provider_weights(proposed))
+                        violations.extend(self._verifier._check_backoff(proposed))
+                        violations.extend(self._verifier._check_retry_budget(proposed))
+                    except Exception:
+                        logger.exception("[adaptation] correction fallback verification failed")
+                    is_valid = len(violations) == 0
+                except Exception:
+                    # Fall back to synchronous call if executor fails for any other reason
+                    is_valid, violations = self._verifier.check(corrected_theta.model_dump(), True, tlc_timeout)
+            except Exception:
+                # As a last resort, do a synchronous check
+                is_valid, violations = self._verifier.check(corrected_theta.model_dump(), True, tlc_timeout)
+        except Exception:
+            # As a last resort, do a synchronous check
+            is_valid, violations = self._verifier.check(corrected_theta.model_dump(), True, tlc_timeout)
+
         state.verification_pass = is_valid
-        state.violations        = violations
+        state.violations = violations
 
         if is_valid:
             logger.info("[adaptation] correction passed verification")
+        else:
+            logger.warning(f"[adaptation] correction still invalid — {violations}")
+
         # emit correction record
         try:
             _emit_adaptation_record(
@@ -416,8 +616,6 @@ class AdaptationLoop:
             )
         except Exception:
             logger.debug("[adaptation] failed to emit correction record")
-        else:
-            logger.warning(f"[adaptation] correction still invalid — {violations}")
 
         return state
 
@@ -439,9 +637,24 @@ class AdaptationLoop:
                     "provider_weights": getattr(prior_obj, "provider_weights", None),
                     "max_retry": getattr(prior_obj, "max_retry", None),
                 }
+                # save full prior theta for potential rollback
+                try:
+                    state.prior_theta = dict(prior_obj.__dict__)
+                except Exception:
+                    try:
+                        state.prior_theta = dict(prior_obj.__dict__)
+                    except Exception:
+                        state.prior_theta = None
             except Exception:
                 prior = None
+            # Deploy new theta (canary-style: we keep prior in state to allow rollback)
             self._policy_store.update(new_theta)
+            # record deployment time (ms) so observation can wait for
+            # a snapshot that includes post-deploy traffic only
+            try:
+                state.deployed_at_ms = int(time.time() * 1000)
+            except Exception:
+                state.deployed_at_ms = None
             logger.info(
                 f"[adaptation] policy deployed — "
                 f"max_retry={new_theta.max_retry} "
@@ -473,9 +686,50 @@ class AdaptationLoop:
 
     async def _observe_outcome(self, state: AdaptationState) -> AdaptationState:
         logger.info(f"[adaptation] waiting {OBSERVE_WAIT_S}s to observe outcome")
+        # Initial sleep gives the system a chance to apply the new policy
         await asyncio.sleep(OBSERVE_WAIT_S)
 
+        # After the initial pause, prefer a snapshot that reflects post-deploy
+        # traffic. Poll the aggregator until we observe a snapshot whose
+        # `window_end_ms` is after the recorded deployment time and which has
+        # sufficient data, up to a reasonable deadline. To reduce false
+        # negatives from transient noise, require N consecutive good
+        # post-deploy snapshots (configurable via `RECOVERY_CONSECUTIVE_GOOD`).
+        try:
+            consecutive_required = int(os.getenv("RECOVERY_CONSECUTIVE_GOOD", "2"))
+        except Exception:
+            consecutive_required = 2
+
+        poll_deadline = time.time() + OBSERVE_WAIT_S + 10.0 + (consecutive_required * OBSERVE_WAIT_S)
         snapshot, _ = self._aggregator.get_snapshot()
+
+        # Helper to check snapshot freshness and sufficiency
+        def _is_post_deploy(snap: Optional[object]) -> bool:
+            if snap is None:
+                return False
+            # prefer snapshots with sufficient data
+            try:
+                if not getattr(snap, "has_sufficient_data", False):
+                    return False
+            except Exception:
+                return False
+            # if we have a recorded deploy time, ensure snapshot covers later events
+            if getattr(state, "deployed_at_ms", None):
+                try:
+                    # Prefer windows that start after deployment so the
+                    # snapshot only contains post-deploy traffic. Using
+                    # `window_start_ms` avoids contamination from earlier
+                    # pre-deploy requests in sliding windows.
+                    return getattr(snap, "window_start_ms", 0) >= int(state.deployed_at_ms)
+                except Exception:
+                    return False
+            return True
+
+        # First, wait until we see any post-deploy, sufficient snapshot (or timeout)
+        while not _is_post_deploy(snapshot) and time.time() < poll_deadline:
+            await asyncio.sleep(1.0)
+            snapshot, _ = self._aggregator.get_snapshot()
+
         state.cycle_count += 1
 
         if snapshot is None:
@@ -504,7 +758,51 @@ class AdaptationLoop:
                 "timeout_rate": getattr(snapshot, "timeout_rate", None),
                 "invariants": self._get_breaches(snapshot),
             }
-            recovery_confirmed = not snapshot.invariant_risk.any_breach
+
+            # Recovery gating: allow stricter research-grade criteria via
+            # environment variable `RECOVERY_REQUIRE_APPROVAL`.
+            require_approval = os.getenv("RECOVERY_REQUIRE_APPROVAL", "0") == "1"
+            try:
+                min_approval = float(os.getenv("RECOVERY_MIN_APPROVAL", str(HealthThresholds.min_approval_rate)))
+            except Exception:
+                min_approval = HealthThresholds.min_approval_rate
+
+            # Require consecutive successful post-deploy snapshots to avoid
+            # transient misclassification. Only count snapshots that are
+            # post-deploy and have sufficient data.
+            try:
+                consecutive_required = int(os.getenv("RECOVERY_CONSECUTIVE_GOOD", "2"))
+            except Exception:
+                consecutive_required = 2
+
+            consecutive_ok = 0
+            # Allow a short additional window to collect consecutive snapshots
+            consecutive_deadline = time.time() + (consecutive_required * OBSERVE_WAIT_S) + 5.0
+            # Evaluate successive snapshots until we either reach the required
+            # consecutive count or exhaust the deadline.
+            while time.time() < consecutive_deadline and consecutive_ok < consecutive_required:
+                # Only evaluate snapshots that cover post-deploy traffic
+                if _is_post_deploy(snapshot):
+                    try:
+                        snapshot_ok = (not snapshot.invariant_risk.any_breach) and (
+                            (not require_approval) or (snapshot.approval_rate >= min_approval)
+                        )
+                    except Exception:
+                        snapshot_ok = False
+
+                    if snapshot_ok:
+                        consecutive_ok += 1
+                    else:
+                        consecutive_ok = 0
+
+                if consecutive_ok >= consecutive_required:
+                    break
+
+                await asyncio.sleep(1.0)
+                snapshot, _ = self._aggregator.get_snapshot()
+
+            recovery_confirmed = consecutive_ok >= consecutive_required
+
             _emit_adaptation_record(
                 "observed",
                 state.proposal_id,
@@ -517,17 +815,53 @@ class AdaptationLoop:
         except Exception:
             logger.debug("[adaptation] failed to emit observed record")
 
-        if not snapshot.invariant_risk.any_breach:
+        # Only mark the loop as successful when the recovery gating passes.
+        if recovery_confirmed:
             state.status = "success"
             logger.info(
                 f"[adaptation] recovery confirmed — "
                 f"approval_rate={snapshot.approval_rate:.3f}"
             )
         else:
-            logger.info(
-                f"[adaptation] not yet recovered — "
-                f"cycle {state.cycle_count}/{MAX_CYCLES}"
-            )
+            # If invariants re-appear after deployment, revert to prior theta
+            try:
+                if snapshot.invariant_risk.any_breach:
+                    if getattr(state, "prior_theta", None):
+                        try:
+                            prior_vec = PolicyVector(**state.prior_theta)
+                            self._policy_store.update(prior_vec)
+                            logger.warning("[adaptation] post-deploy invariants detected — reverted to prior policy (proposal_id=%s)", state.proposal_id)
+                            try:
+                                _emit_adaptation_record(
+                                    "reverted",
+                                    state.proposal_id,
+                                    {
+                                        "reverted_to": {
+                                            "provider_weights": getattr(prior_vec, "provider_weights", None),
+                                            "max_retry": getattr(prior_vec, "max_retry", None),
+                                        },
+                                        "post_snapshot": post_snapshot,
+                                    },
+                                )
+                            except Exception:
+                                logger.debug("[adaptation] failed to emit reverted record")
+                        except Exception:
+                            logger.exception("[adaptation] failed to revert to prior policy")
+                    else:
+                        logger.warning("[adaptation] post-deploy invariants detected but no prior policy available to revert to")
+            except Exception:
+                logger.exception("[adaptation] error while handling post-deploy revert logic")
+            # If invariants cleared but approval below threshold, log and continue
+            if not snapshot.invariant_risk.any_breach and require_approval:
+                logger.info(
+                    f"[adaptation] invariants cleared but approval below threshold "
+                    f"({snapshot.approval_rate:.3f} < {min_approval:.3f}) — continuing observation"
+                )
+            else:
+                logger.info(
+                    f"[adaptation] not yet recovered — "
+                    f"cycle {state.cycle_count}/{MAX_CYCLES}"
+                )
 
         return state
 

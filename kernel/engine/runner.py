@@ -13,6 +13,7 @@ import logging
 import pathlib
 import sys
 import time
+from typing import Optional
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
@@ -26,9 +27,19 @@ from kernel.aggregator.snapshot import MetricsSnapshot, SnapshotDelta
 from kernel.adaptation.loop import AdaptationLoop
 from kernel.verification.verifier import InvariantVerifier
 from simulator.policy_engine import PolicyStore
-from services.llms.azure_openai import AzureOpenAILLM
-from services.llms.gemini import GeminiLLM
 from services.llms.mock import MockLLM
+
+# Optional provider-specific LLMs may require external packages (openai, google).
+# Import them lazily and tolerate failure so local tests run with `MockLLM`.
+try:
+    from services.llms.azure_openai import AzureOpenAILLM
+except Exception:
+    AzureOpenAILLM = None
+
+try:
+    from services.llms.gemini import GeminiLLM
+except Exception:
+    GeminiLLM = None
 
 ROOT     = pathlib.Path(__file__).parent.parent.parent
 STREAMS  = ROOT / "data" / "streams"
@@ -64,7 +75,7 @@ class KernelEngine:
         self._active_cooldown_s  = cooldown_s
         self._min_approval_rate  = min_approval_rate
         self._mode               = self.MODE_MONITORING
-        self._last_success_at_s  : float | None = None
+        self._last_success_at_s  : Optional[float] = None
         self._allow_degraded_trigger_in_cooldown = True
 
     async def run(self) -> None:
@@ -101,7 +112,7 @@ class KernelEngine:
         self,
         objective : str,
         snapshot  : MetricsSnapshot,
-        delta     : SnapshotDelta | None,
+        delta     : Optional[SnapshotDelta],
     ) -> None:
         self._adaptation_running = True
         try:

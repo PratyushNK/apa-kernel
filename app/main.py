@@ -45,6 +45,11 @@ async def start_processes() -> None:
     state.simulator_log.clear()
     state.kernel_log.clear()
     state.adaptation_log.clear()
+    # Clear any previously captured agent decision events so UI starts fresh
+    try:
+        state.agent_log.clear()
+    except Exception:
+        pass
     state.simulator_proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "simulator/runner.py",
@@ -102,6 +107,7 @@ async def stop() -> JSONResponse:
     state.cycles = 0
     state.simulator_log.clear()
     state.kernel_log.clear()
+    state.agent_log.clear()
     # also clear persistent event stream so aggregator restarts without prior history
     try:
         STREAM_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -220,13 +226,17 @@ async def stream() -> EventSourceResponse:
                 "adaptation_status": state.adaptation_status,
                 "adaptation_status_reason": semantic_reason,
                 "tlc": {
-                    "status": state.tlc_status,
-                    "violations": state.tlc_violations,
-                    "output_path": state.tlc_output_path,
+                        "status": state.tlc_status,
+                        "violations": state.tlc_violations,
+                        "output_path": state.tlc_output_path,
+                        "ran": state.tlc_ran,
+                        "result": state.tlc_result,
+                        "verification_status": state.verification_status,
                 },
                 "simulator_log": list(state.simulator_log)[-30:],
                 "kernel_log": list(state.kernel_log)[-30:],
                 "adaptation_log": list(state.adaptation_log)[-20:],
+                "agent_log": list(state.agent_log)[-30:],
                 "event_tail": events[-20:],
                 "system_status": state.system_status,
                 "engine_meta": {"last_trigger": state.last_trigger, "last_status": state.last_status, "cycles": state.cycles, "max_cycles": parse_max_cycles()},

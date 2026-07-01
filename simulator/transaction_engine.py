@@ -24,6 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from decimal import Decimal
+from typing import Optional
 
 from events import (
     AttemptStatus,
@@ -66,7 +67,7 @@ class TxnContext:
     state               : TxnState         = TxnState.INIT
     attempt_count       : int              = 0
     active_provider     : str              = ""
-    last_status         : AttemptStatus | None = None
+    last_status         : Optional[AttemptStatus] = None
     _current_attempt_id : str              = ""
 
 
@@ -141,7 +142,7 @@ class TransactionEngine:
             sla_deadline_ms = ctx.sla_deadline_ms,
     )
 
-    def _route(self, ctx, clock_ms, policy_engine) -> BaseEvent | None:
+    def _route(self, ctx, clock_ms, policy_engine) -> Optional[BaseEvent]:
         t_start  = clock_ms
         provider = policy_engine.choose_provider(ctx.txn_id)
     
